@@ -20,4 +20,8 @@ public class RefreshToken {
 
     @Column(nullable = false, unique = true)
     private String value;
+
+    public void setValue(String refreshTokenValue) {
+
+    }
 }

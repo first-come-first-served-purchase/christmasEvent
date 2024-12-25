@@ -1,11 +1,14 @@
 package com.doosan.christmas.domain;
 
+import com.doosan.christmas.shared.Authority;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
 import org.hibernate.Hibernate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import javax.persistence.*;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 @Builder
@@ -36,6 +39,31 @@ public class Member extends Timestamped implements Serializable { // 생성/수�
     @Builder.Default // 기본값 설정
     private boolean isDeleted = Boolean.FALSE; // 삭제 여부
 
+
+    @Override
+    public int hashCode() {
+        // 해시 코드 생성 (클래스와 ID 기반)
+        return getClass().hashCode();
+    }
+
+    public boolean validatePassword(PasswordEncoder passwordEncoder, String password) {
+        // 입력 비밀번호와 저장된 비밀번호 검증
+        return passwordEncoder.matches(password, this.password);
+    }
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "Member_roles", joinColumns = @JoinColumn(name = "Member_id"))
+    @Column(name = "roles") // "roles" 컬럼만 사용
+    @Builder.Default
+    private List<String> roles = new ArrayList<>();
+
+    @PrePersist
+    public void prePersist() {
+        if (roles.isEmpty()) {
+            roles.add(Authority.ROLE_USER); // 기본 권한
+        }
+    }
+
     @Override
     public boolean equals(Object object) {
         // 동일성 검사 (ID 기준으로 비교)
@@ -47,16 +75,5 @@ public class Member extends Timestamped implements Serializable { // 생성/수�
         }
         Member member = (Member) object;
         return id != null && Objects.equals(id, member.id);
-    }
-
-    @Override
-    public int hashCode() {
-        // 해시 코드 생성 (클래스와 ID 기반)
-        return getClass().hashCode();
-    }
-
-    public boolean validatePassword(PasswordEncoder passwordEncoder, String password) {
-        // 입력 비밀번호와 저장된 비밀번호 검증
-        return passwordEncoder.matches(password, this.password);
     }
 }

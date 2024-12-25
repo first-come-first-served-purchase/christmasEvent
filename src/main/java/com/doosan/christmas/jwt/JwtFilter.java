@@ -18,6 +18,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -27,6 +28,7 @@ import java.security.Key;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -40,6 +42,7 @@ public class JwtFilter extends OncePerRequestFilter {
     private final TokenProvider tokenProvider; // 토큰 관련 유틸리티
     private final UserDetailsServiceImpl userDetailsService; // 사용자 정보 서비스
 
+    @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws IOException, ServletException {
 
@@ -49,7 +52,7 @@ public class JwtFilter extends OncePerRequestFilter {
         String jwt = resolveToken(request); // 요청에서 JWT 토큰 추출
 
         if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) { // 토큰 유효성 검사
-            Claims claims; // 토큰 클레임 저장 객체
+            Claims claims;
 
             try {
                 claims = Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(jwt).getBody(); // 토큰 파싱
@@ -61,22 +64,36 @@ public class JwtFilter extends OncePerRequestFilter {
                 response.setContentType("application/json;charset=UTF-8");
                 response.getWriter().println(
                         new ObjectMapper().writeValueAsString(
-                                ResponseDto.fail("BAD_REQUEST", "Token이 유효하지 않습니다.") // 에러 응답 반환
+                                ResponseDto.fail("BAD_REQUEST", "Token이 유효하지 않습니다.")
                         )
                 );
                 response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                return; // 필터 체인 중단
             }
 
             String subject = claims.getSubject(); // 사용자 식별 정보 추출
-            Collection<? extends GrantedAuthority> authorities =
-                    Arrays.stream(claims.get(AUTHORITIES_KEY).toString().split(",")) // 권한 정보 추출
-                            .map(SimpleGrantedAuthority::new)
-                            .collect(Collectors.toList());
+
+            // 권한 정보 필터링 및 변환
+            // 권한 정보 추출
+            String authorities = claims.get(AUTHORITIES_KEY) != null ? claims.get(AUTHORITIES_KEY).toString() : "";
+            Collection<? extends GrantedAuthority> grantedAuthorities;
+
+            if (authorities.isBlank()) {
+
+                // 권한 정보가 없으면 기본 ROLE_USER 설정
+                grantedAuthorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
+
+            } else {
+                // 권한 정보가 있으면 변환
+                grantedAuthorities = Arrays.stream(authorities.split(","))
+                        .filter(auth -> auth != null && !auth.isBlank())
+                        .map(SimpleGrantedAuthority::new)
+                        .collect(Collectors.toList());
+            }
 
             UserDetails principal = userDetailsService.loadUserByUsername(subject); // 사용자 정보 로드
 
-            Authentication authentication = new UsernamePasswordAuthenticationToken(principal, jwt, authorities); // 인증 객체 생성
-
+            Authentication authentication = new UsernamePasswordAuthenticationToken(principal, jwt, grantedAuthorities); // 인증 객체 생성
             SecurityContextHolder.getContext().setAuthentication(authentication); // 인증 정보 저장
         }
 

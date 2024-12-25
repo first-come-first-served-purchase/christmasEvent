@@ -53,6 +53,8 @@ public class SecurityConfiguration {
                 .authorizeRequests()
                 .antMatchers("/v1/users/**").permitAll() // 특정 경로 모두 허용
                 .antMatchers("/v1/members/**").permitAll() // 특정 경로 모두 허용
+                .antMatchers("/v1/users/signup/admin").hasAuthority("ROLE_ADMIN") // 관리자만 접근
+                .antMatchers("/v1/users/signup/seller").hasAuthority("ROLE_ADMIN") // 관리자만 접근
                 .antMatchers("/v1/auth/**").permitAll()
                 .antMatchers( // Swagger 관련 경로 허용
                         "/v2/api-docs",

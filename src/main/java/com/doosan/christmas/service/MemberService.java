@@ -8,6 +8,7 @@ import com.doosan.christmas.dto.responsedto.ResponseDto;
 import com.doosan.christmas.jwt.TokenProvider;
 import com.doosan.christmas.repository.MemberRepository;
 import com.doosan.christmas.repository.RefreshTokenRepository;
+import com.doosan.christmas.shared.Authority;
 import com.doosan.christmas.util.RedisUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -42,8 +45,8 @@ public class MemberService {
 
         // 이메일 인증 확인
         if (!authService.isEmailVerified(requestDto.getEmail())) {
-            logger.warn("@@@@@@@@@@@@@@@이메일 인증 실패@@@@@ - 이메일: {}, 이유: Redis에 인증 상태가 없음 또는 이메일 불일치", requestDto.getEmail());
-            return ResponseDto.fail("EMAIL_NOT_VERIFIED", "이메일 인증이 완료되지 않았습니다.");
+            logger.warn("이메일 인증 실패 - 이메일: {}, 이유: Redis에 인증 상태가 없음 또는 이메일 불일치", requestDto.getEmail());
+            return ResponseDto.fail("EMAIL_NOT_VERIFIED", "이메일 인증이 완료 되지 않았습니다.");
         }
 
         // 이메일 중복 확인
@@ -51,20 +54,44 @@ public class MemberService {
             return ResponseDto.fail("EMAIL_DUPLICATED", "이미 사용 중인 이메일입니다.");
         }
 
+        // 닉네임 중복 확인
+        if (memberRepository.findByNickname(requestDto.getNickname()).isPresent()) {
+            return ResponseDto.fail("NICKNAME_DUPLICATED", "이미 사용 중인 닉네임입니다.");
+        }
+
+        // 비밀번호와 비밀번호 확인 체크
+        if (!requestDto.getPassword().equals(requestDto.getPasswordConfirm())) {
+            log.warn("비밀번호 불일치 - password: {}, passwordConfirm: {}", requestDto.getPassword(), requestDto.getPasswordConfirm());
+        }
+
+        // 기본 권한 설정
+        List<String> roles = new ArrayList<>();
+        roles.add(Authority.ROLE_USER);
+
+        // 특정 이메일인 경우 관리자 권한 추가
+        if ("doosan0000425@gmail.com".equals(requestDto.getEmail())) {
+            roles.clear(); // 이전 역할 제거
+            roles.add(Authority.ROLE_ADMIN);
+            log.info("관리자 권한 부여 - 이메일: {}", requestDto.getEmail());
+        }
+
+        log.info("Roles 설정 확인 - email: {}, roles: {}", requestDto.getEmail(), roles);
+
+
         // 회원 생성 및 저장
         Member member = Member.builder()
                 .email(requestDto.getEmail())
                 .nickname(requestDto.getNickname())
                 .password(passwordEncoder.encode(requestDto.getPassword()))
                 .address(requestDto.getAddress())
+                .roles(roles) // 권한 설정
                 .build();
 
         memberRepository.save(member);
 
+        logger.info("회원가입 완료 - email: {}, nickname: {} , roles: {} ", member.getEmail(), member.getNickname() , member.getRoles());
 
-        logger.info("회원가입 완료 - email: {}, name: {}", member.getEmail(), member.getNickname());
-
-        return ResponseDto.success("회원 가입이 완료되었습니다.");
+        return ResponseDto.success("회원 가입이 완료 되었습니다.");
     }
 
 
@@ -92,11 +119,12 @@ public class MemberService {
         return ResponseDto.success(
                 MemberResponseDto.builder()
                         .id(member.getId())
-                        .nickname(member.getNickname())
-                        .createdAt(member.getCreatedAt())
-                        .modifiedAt(member.getModifiedAt())
-                        .address(member.getAddress())
-                        .email(member.getEmail())
+                        .nickname(member.getNickname())// 닉네임
+                        .address(member.getAddress())// 주소
+                        .email(member.getEmail()) // 이메일
+                        .roles(member.getRoles()) // 사용자 권한
+                        .createdAt(member.getCreatedAt())// 생성시간
+                        .modifiedAt(member.getModifiedAt())// 수정시간
                         .build()
         );
     }
@@ -141,14 +169,16 @@ public class MemberService {
 
         TokenDto tokenDto = tokenProvider.generateTokenDto(member);
         tokenToHeaders(tokenDto, response);
+
         return ResponseDto.success(
                 MemberResponseDto.builder()
                         .id(member.getId())
-                        .nickname(member.getNickname())
-                        .createdAt(member.getCreatedAt())
-                        .address(member.getAddress())
-                        .modifiedAt(member.getModifiedAt())
-                        .email(member.getEmail())
+                        .nickname(member.getNickname()) // 닉네임
+                        .email(member.getEmail()) // 이메일
+                        .address(member.getAddress()) // 주소
+                        .roles(member.getRoles()) // 권한
+                        .createdAt(member.getCreatedAt()) // 생성시간
+                        .modifiedAt(member.getModifiedAt()) // 수정시간
                         .build()
         );
     }
@@ -206,6 +236,31 @@ public class MemberService {
             return ResponseDto.success("이메일 인증이 완료되었습니다.");
         }
         return ResponseDto.fail("VERIFICATION_FAILED", "인증번호가 일치하지 않습니다.");
+    }
+
+    // 관리자 등록
+    @Transactional
+    public ResponseDto<?> createMemberWithRoles(MemberRequestDto requestDto, List<String> roles) {
+        log.info("회원가입 요청 데이터: {}, roles: {}", requestDto, roles);
+
+        // 이메일 중복 확인
+        if (memberRepository.findByEmail(requestDto.getEmail()).isPresent()) {
+            return ResponseDto.fail("EMAIL_DUPLICATED", "이미 사용 중인 이메일입니다.");
+        }
+
+        // 회원 생성
+        Member member = Member.builder()
+                .nickname(requestDto.getNickname())
+                .email(requestDto.getEmail())
+                .password(passwordEncoder.encode(requestDto.getPassword()))
+                .address(requestDto.getAddress())
+                .roles(roles) // 권한 설정
+                .build();
+
+        memberRepository.save(member);
+        log.info("회원가입 완료 - email: {}, roles: {}", member.getEmail(), member.getRoles());
+
+        return ResponseDto.success("회원 가입이 완료되었습니다.");
     }
 
 }

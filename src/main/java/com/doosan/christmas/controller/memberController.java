@@ -5,14 +5,17 @@ import com.doosan.christmas.dto.requestdto.LoginRequestDto;
 import com.doosan.christmas.dto.requestdto.MemberRequestDto;
 import com.doosan.christmas.dto.responsedto.ResponseDto;
 import com.doosan.christmas.service.MemberService;
+import com.doosan.christmas.shared.Authority;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
 import java.io.IOException;
+import java.util.List;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -24,23 +27,31 @@ public class memberController {
     //회원가입
     @PostMapping(value = "/signup")
     public ResponseDto<?> signup(@RequestBody @Valid MemberRequestDto requestDto) {
-        // 요청 데이터 전체 로깅
         log.info("회원가입 요청 데이터 ################: {}", requestDto);
-
-        // 세부 필드별 로깅
         log.debug("회원가입 요청 - 닉네임: {}, 이메일: {},  주소: {}, 비밀번호: {}, 비밀번호 확인: {}",
                 requestDto.getNickname(), requestDto.getEmail(),
                 requestDto.getAddress(), requestDto.getPassword(), requestDto.getPasswordConfirm());
 
-        // 비밀번호와 비밀번호 확인 체크
-
-        if (!requestDto.getPassword().equals(requestDto.getPasswordConfirm())) {
-            log.warn("비밀번호 불일치 - password: {}, passwordConfirm: {}", requestDto.getPassword(), requestDto.getPasswordConfirm());
-        }
-
         // 서비스 계층으로 전달
         return memberService.createMember(requestDto);
     }
+
+    // 관리자 등록
+    @PreAuthorize("hasRole('ROLE_ADMIN')") // 관리자만 접근 가능
+    @PostMapping("/signup/admin")
+    public ResponseDto<?> createAdmin(@RequestBody MemberRequestDto requestDto) {
+        List<String> roles = List.of(Authority.ROLE_ADMIN); // 관리자 권한 부여
+        return memberService.createMemberWithRoles(requestDto, roles);
+    }
+
+    // 판매자 등록
+    @PreAuthorize("hasRole('ROLE_ADMIN')") // 관리자만 접근 가능
+    @PostMapping("/signup/seller")
+    public ResponseDto<?> createSeller(@RequestBody MemberRequestDto requestDto) {
+        List<String> roles = List.of(Authority.ROLE_SELLER); // 판매자 권한 부여
+        return memberService.createMemberWithRoles(requestDto, roles);
+    }
+
 
 
     //로그인

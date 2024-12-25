@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Builder
 @Getter
@@ -17,4 +18,5 @@ public class MemberResponseDto  {
     private String address; // 주소
     private LocalDateTime createdAt; // 생성 시간
     private LocalDateTime modifiedAt; // 수정 시간
+    private List<String> roles; // 사용자 권한
 }
