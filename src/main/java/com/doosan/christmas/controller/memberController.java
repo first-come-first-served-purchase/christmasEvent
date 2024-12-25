@@ -22,17 +22,26 @@ public class memberController {
     private final MemberService memberService;
 
     //회원가입
-    @PostMapping(value="/signup")
+    @PostMapping(value = "/signup")
     public ResponseDto<?> signup(@RequestBody @Valid MemberRequestDto requestDto) {
-        log.info("회원가입 요청 - email: {}, name: {}", requestDto.getEmail(), requestDto.getName());
-        
-        // 비밀번호 확인 체크
+        // 요청 데이터 전체 로깅
+        log.info("회원가입 요청 데이터 ################: {}", requestDto);
+
+        // 세부 필드별 로깅
+        log.debug("회원가입 요청 - 닉네임: {}, 이메일: {},  주소: {}, 비밀번호: {}, 비밀번호 확인: {}",
+                requestDto.getNickname(), requestDto.getEmail(),
+                requestDto.getAddress(), requestDto.getPassword(), requestDto.getPasswordConfirm());
+
+        // 비밀번호와 비밀번호 확인 체크
+
         if (!requestDto.getPassword().equals(requestDto.getPasswordConfirm())) {
-            return ResponseDto.fail("PASSWORD_MISMATCH", "비밀번호가 일치하지 않습니다.");
+            log.warn("비밀번호 불일치 - password: {}, passwordConfirm: {}", requestDto.getPassword(), requestDto.getPasswordConfirm());
         }
 
+        // 서비스 계층으로 전달
         return memberService.createMember(requestDto);
     }
+
 
     //로그인
     @PostMapping(value = "/login")
@@ -53,10 +62,10 @@ public class memberController {
     }
 
     // 회원 탈퇴
-    @DeleteMapping(value = "/withdrawal/{memberId}")
-    public ResponseDto<?> withdrawal(@PathVariable Long memberId, @AuthenticationPrincipal UserDetailsImpl userDetails) {
+    @DeleteMapping(value = "/delete/{memberId}")
+    public ResponseDto<?> delete(@PathVariable Long memberId, @AuthenticationPrincipal UserDetailsImpl userDetails) {
         log.info("회원 탈퇴 요청: userId = {}, 인증 사용자: {}", memberId, userDetails.getMember().getNickname());
-        ResponseDto<?> result = memberService.withdrawMember(memberId, userDetails);
+        ResponseDto<?> result = memberService.memberDelete(memberId, userDetails);
         log.info("회원 탈퇴 처리 완료: {}", result);
         return result;
     }

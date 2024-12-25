@@ -1,66 +1,82 @@
 package com.doosan.christmas.service;
 
 import com.doosan.christmas.util.RedisUtil;
-import com.doosan.christmas.dto.responsedto.ResponseDto;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
-import javax.validation.constraints.Email;
-import javax.validation.constraints.NotEmpty;
-
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class AuthService {
 
-    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
+    private final MailSendService mailSendService;
     private final RedisUtil redisUtil;
 
-    @Autowired
-    private MailSendService mailSendService;
-
-    public AuthService(RedisUtil redisUtil) {
-        this.redisUtil = redisUtil;
-    }
-
-    public Boolean checkAuthNum(@Email @NotEmpty(message = "이메일을 입력해 주세요") String email,
-                                @NotEmpty(message = "인증 번호를 입력해 주세요") String authNum) {
-        logger.info("인증 번호 검증 시작 - 이메일: {}, 인증 번호: {}", email, authNum);
-
-        // Redis에서 인증 번호 조회
-        String storedEmail = redisUtil.getData(authNum);
-
-        if (storedEmail == null) {
-            logger.warn("인증 번호가 Redis에 존재하지 않음 - 인증 번호: {}", authNum);
-            return false;
-        }
-
-        logger.debug("Redis에서 조회된 이메일: {}", storedEmail);
-
-        // Redis에 저장된 이메일과 입력받은 이메일이 일치하는지 확인
-        boolean isMatch = storedEmail.equals(email);
-
-        if (isMatch) {
-            logger.info("인증 성공 - 이메일: {}", email);
-        } else {
-            logger.warn("인증 실패 - 입력 이메일: {}, 저장된 이메일: {}", email, storedEmail);
-        }
-        return isMatch;
-    }
-
+    /**
+     * 이메일 인증 코드 발송
+     * @param email 이메일 주소
+     * @return 인증 코드
+     */
     public String sendAuthEmail(String email) {
-        logger.info("이메일 인증 코드 발송 시작 - 이메일: {}", email);
-        String authCode = mailSendService.sendAuthEmail(email);
-        logger.info("이메일 인증 코드 발송 완료 - 이메일: {}", email);
-        return authCode;
+        log.info("이메일 인증 코드 발송 요청 시작 - 이메일: {}", email);
+
+        try {
+            // 인증 코드 생성 및 발송
+            String authCode = mailSendService.sendAuthEmail(email);
+            log.info("이메일 인증 코드 발송 성공 - 이메일: {}, 인증 코드: {}", email, authCode);
+
+            return authCode;
+        } catch (Exception e) {
+            log.error("이메일 인증 코드 발송 실패 - 이메일: {}, 오류: {}", email, e.getMessage(), e);
+            throw new RuntimeException("이메일 인증 코드 발송 중 오류가 발생했습니다.", e);
+        }
     }
 
-    public ResponseDto<Object> verifyEmailCode(String email, String authCode) {
-        boolean isVerified = checkAuthNum(email, authCode);
-        if (isVerified) {
-            return ResponseDto.success(true);
-        } else {
-            return ResponseDto.fail("VERIFICATION_FAILED", "이메일 인증에 실패했습니다.");
+    /**
+     * 인증 번호 확인
+     * @param email 이메일 주소
+     * @param authNum 인증 코드
+     * @return 인증 성공 여부
+     */
+    public boolean checkAuthNum(String email, String authNum) {
+        log.info("인증 번호 확인 시작 - 이메일: {}, 인증 번호: {}", email, authNum);
+
+        String savedEmail = redisUtil.getData(authNum);
+        log.debug("Redis 조회 결과 - 인증 번호: {}, 저장된 이메일: {}", authNum, savedEmail);
+
+        if (email.equals(savedEmail)) {
+            // 인증 성공 시 이메일 키로 "VERIFIED" 상태 저장
+            redisUtil.setDataExpire(email, "VERIFIED", 3600); // 인증 상태 1시간 유지
+            log.info("인증 번호 확인 성공 - 이메일: {}", email);
+            return true;
         }
+
+        log.warn("인증 번호 확인 실패 - 이메일: {}, 저장된 이메일: {}", email, savedEmail);
+        return false;
+    }
+
+
+
+    /**
+     * 이메일 인증 여부 확인
+     * @param email 이메일 주소
+     * @return 인증 완료 여부
+     */
+    public boolean isEmailVerified(String email) {
+        log.info("이메일 인증 여부 확인 시작 - 이메일: {}", email);
+
+        // Redis에서 인증 상태 조회
+        String status = redisUtil.getData(email);
+        log.debug("Redis 조회 결과 - 이메일: {}, 상태: {}", email, status);
+
+        boolean isVerified = "VERIFIED".equals(status);
+        if (isVerified) {
+            log.info("이메일 인증 상태 확인 완료 - 이메일: {}, 인증 상태: VERIFIED", email);
+        } else {
+            log.warn("이메일 인증 상태 확인 실패 - 이메일: {}, 상태: {}", email, status);
+        }
+
+        return isVerified;
     }
 }

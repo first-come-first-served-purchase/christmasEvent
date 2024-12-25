@@ -51,6 +51,7 @@ public class SecurityConfiguration {
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS) // 세션을 사용하지 않는 Stateless 방식 설정
                 .and()
                 .authorizeRequests()
+                .antMatchers("/v1/users/**").permitAll() // 특정 경로 모두 허용
                 .antMatchers("/v1/members/**").permitAll() // 특정 경로 모두 허용
                 .antMatchers("/v1/auth/**").permitAll()
                 .antMatchers( // Swagger 관련 경로 허용
