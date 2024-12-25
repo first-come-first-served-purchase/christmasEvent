@@ -26,7 +26,7 @@ public class memberController {
 
     //회원가입
     @PostMapping(value = "/signup")
-    public ResponseDto<?> signup(@RequestBody @Valid MemberRequestDto requestDto) {
+    public ResponseDto<?> signup(@RequestBody @Valid MemberRequestDto requestDto) throws Exception {
         log.info("회원가입 요청 데이터 ################: {}", requestDto);
         log.debug("회원가입 요청 - 닉네임: {}, 이메일: {},  주소: {}, 비밀번호: {}, 비밀번호 확인: {}",
                 requestDto.getNickname(), requestDto.getEmail(),

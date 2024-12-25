@@ -24,4 +24,8 @@ public class RefreshToken {
     public void setValue(String refreshTokenValue) {
 
     }
+
+    public Long getMemberId() {
+        return member.getId();
+    }
 }
