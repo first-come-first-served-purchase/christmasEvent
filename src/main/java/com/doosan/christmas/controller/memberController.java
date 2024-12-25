@@ -17,13 +17,20 @@ import java.io.IOException;
 @Slf4j
 @RequiredArgsConstructor
 @RestController
-@RequestMapping(value = "/v1/members")
+@RequestMapping(value = "/v1/users")
 public class memberController {
     private final MemberService memberService;
 
     //회원가입
     @PostMapping(value="/signup")
-    public ResponseDto<?> signup(@RequestBody @Valid MemberRequestDto requestDto) throws IOException {
+    public ResponseDto<?> signup(@RequestBody @Valid MemberRequestDto requestDto) {
+        log.info("회원가입 요청 - email: {}, name: {}", requestDto.getEmail(), requestDto.getName());
+        
+        // 비밀번호 확인 체크
+        if (!requestDto.getPassword().equals(requestDto.getPasswordConfirm())) {
+            return ResponseDto.fail("PASSWORD_MISMATCH", "비밀번호가 일치하지 않습니다.");
+        }
+
         return memberService.createMember(requestDto);
     }
 

@@ -21,8 +21,8 @@ public class ResponseDto<T> {
     }
 
     @Getter
-    @AllArgsConstructor // 에러 코드와 메시지 포함한 생성자
-    static class Error {
+    @AllArgsConstructor
+    public static class Error { // 정적 클래스
         private String code; // 에러 코드
         private String message; // 에러 메시지
     }

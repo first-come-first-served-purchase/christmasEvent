@@ -10,70 +10,59 @@ import com.doosan.christmas.repository.MemberRepository;
 import com.doosan.christmas.repository.RefreshTokenRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
+
+
 import java.util.Optional;
 
 @Slf4j
 @RequiredArgsConstructor
 @Service
 public class MemberService {
+    private static final Logger logger = LoggerFactory.getLogger(MemberService.class);
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenProvider tokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final MailSendService mailSendService;
+    private final AuthService authService;
 
-    // 닉네임 인증
     @Transactional
-    public Object isPresentNickname(String nickname) {
-        Optional<Member> optionalMember = memberRepository.findByNickname(nickname);
-        return optionalMember.orElse(null);
-    }
+    public ResponseDto<?> createMember(MemberRequestDto requestDto) {
+        try {
+            // 이메일 인증번호 확인
+            if (!authService.checkAuthNum(requestDto.getEmail(), requestDto.getAuthNum())) {
+                return ResponseDto.fail("EMAIL_VERIFICATION_FAILED", "이메일 인증이 필요하거나 인증번호가 일치하지 않습니다.");
+            }
 
-    // 회원가입
-    @Transactional
-    public ResponseDto<?> createMember(MemberRequestDto requestDto) throws IOException {
+            // 이메일 중복 확인
+            if (memberRepository.findByEmail(requestDto.getEmail()).isPresent()) {
+                return ResponseDto.fail("EMAIL_DUPLICATED", "이미 사용 중인 이메일입니다.");
+            }
 
-        //이메일 중복 체크
-        if (null != isPresentMember(requestDto.getEmail())) {
-            return ResponseDto.fail("DUPLICATED_EMAIL",
-                    "중복된 이메일 입니다.");
+            // 회원 생성 및 저장
+            Member member = Member.builder()
+                    .email(requestDto.getEmail())
+                    .name(requestDto.getName())
+                    .nickname(requestDto.getName())
+                    .password(passwordEncoder.encode(requestDto.getPassword()))
+                    .address(requestDto.getAddress())
+                    .build();
+
+            memberRepository.save(member);
+            logger.info("회원가입 완료 - email: {}, name: {}", member.getEmail(), member.getName());
+
+            return ResponseDto.success("회원 가입이 완료되었습니다.");
+        } catch (Exception e) {
+            logger.error("회원가입 처리 중 오류 발생 - email: {}, error: {}", requestDto.getEmail(), e.getMessage(), e);
+            return ResponseDto.fail("SERVER_ERROR", "회원가입 처리 중 오류가 발생했습니다.");
         }
-
-        // 이메일 형식 체크
-        if(!requestDto.getEmail().contains("@")) {
-            return ResponseDto.fail("INVALID_EMAIL",
-                    "이메일 형식이 잘못 되었습니다.");
-        }
-
-        // 닉네임 중복 체크
-        if(null != isPresentNickname(requestDto.getNickname())) {
-            return ResponseDto.fail("INVALID_NICKNAME",
-                    "중복된 닉네임 입니다.");
-        }
-
-        Member member = Member.builder()
-                .nickname(requestDto.getNickname())
-                .password(passwordEncoder.encode(requestDto.getPassword()))
-                .email(requestDto.getEmail())
-                .address(requestDto.getAddress())
-                .build();
-        memberRepository.save(member);
-
-        return ResponseDto.success(
-                MemberResponseDto.builder()
-                        .id(member.getId())
-                        .nickname(member.getNickname())
-                        .createdAt(member.getCreatedAt())
-                        .modifiedAt(member.getModifiedAt())
-                        .email(member.getEmail())
-                        .address(member.getAddress())
-                        .build()
-        );
     }
 
     // 로그인
@@ -159,6 +148,7 @@ public class MemberService {
         );
     }
 
+    // 회원 탈퇴
     @Transactional
     public ResponseDto<?> withdrawMember(Long memberId, UserDetailsImpl userDetails) {
         log.info("회원 탈퇴 요청 시작: memberId = {}", memberId);
@@ -187,4 +177,22 @@ public class MemberService {
         // 성공 응답 반환
         return ResponseDto.success("회원 탈퇴가 완료되었습니다.");
     }
+
+
+    // 이메일 인증 요청
+    @Transactional
+    public ResponseDto<?> sendEmailAuth(EmailAuthRequestDTO requestDTO) {
+        try {
+            String authCode = authService.sendAuthEmail(requestDTO.getEmail());
+            logger.info("인증 코드 전송 완료 - 이메일: {}, 인증 코드: {}", requestDTO.getEmail(), authCode);
+            return ResponseDto.success("이메일 인증 코드가 발송되었습니다.");
+        } catch (Exception e) {
+            logger.error("이메일 인증 코드 발송 중 오류 발생 - 이메일: {}, 오류 메시지: {}", 
+                requestDTO.getEmail(), e.getMessage(), e);
+            return ResponseDto.fail("SERVER_ERROR", "이메일 인증 코드 발송 중 오류가 발생했습니다.");
+        }
+    }
+
+
+
 }
