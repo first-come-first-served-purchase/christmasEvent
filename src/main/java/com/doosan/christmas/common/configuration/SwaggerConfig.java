@@ -1,4 +1,4 @@
-package com.doosan.christmas.configuration;
+package com.doosan.christmas.common.configuration;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class SwaggerConfig {
+    
     @Bean
     public OpenAPI openAPI() {
         return new OpenAPI()
@@ -19,8 +20,8 @@ public class SwaggerConfig {
                                         .scheme("bearer")
                                         .bearerFormat("JWT")))
                 .info(new Info()
-                        .title("Christmas Project API")
-                        .description("Christmas Project API Documentation")
-                        .version("v1.0.0"));
+                        .title("크리스마스 프로젝트 API")
+                        .description("크리스마스 프로젝트를 위한 API 문서")
+                        .version("1.0.0"));
     }
 }
