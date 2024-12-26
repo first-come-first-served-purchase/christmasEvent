@@ -39,6 +39,8 @@ out/
 ### 추가 사용자 정의 ###
 HELP.md
 application.properties
+application-test.properties
+application.yml
 docker-compose.yml
 Dockerfile
 .env
