@@ -41,3 +41,6 @@ HELP.md
 application.properties
 docker-compose.yml
 Dockerfile
+.env
+.env.test
+src/test/resources/.env.test

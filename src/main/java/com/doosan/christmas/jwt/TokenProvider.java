@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.Key;
 import java.util.Date;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -41,44 +42,75 @@ public class TokenProvider {
 
     // JWT 토큰 생성
     public TokenDto generateTokenDto(Member member) {
-        long now = (new Date().getTime()); // 현재 시간
+        long now = (new Date().getTime());
+
+        // 권한 정보를 콤마로 구분된 문자열로 변환
+        String authorities = member.getRoles().stream()
+                .filter(role -> role != null && !role.isBlank()) // null 또는 빈 문자열 필터링
+                .collect(Collectors.joining(","));
+
+        log.info("JWT 생성 시작 - 사용자: {}, 권한: {}", member.getNickname(), authorities);
 
         // 엑세스 토큰 생성
         Date accessTokenExpiresIn = new Date(now + ACCESS_TOKEN_EXPIRE_TIME);
         String accessToken = Jwts.builder()
                 .setSubject(member.getNickname())
-                .claim(AUTHORITIES_KEY, "ROLE_USER") // 권한 추가
+                .claim(AUTHORITIES_KEY, authorities)
                 .setExpiration(accessTokenExpiresIn)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
 
-        // 리프레시 토큰 생성
-        String refreshToken = Jwts.builder()
+        log.info("Access Token 생성 완료 - 사용자: {}, 만료 시간: {}", member.getNickname(), accessTokenExpiresIn);
+
+        // 리프레시 토큰 값 생성
+        String refreshTokenValue = Jwts.builder()
                 .setExpiration(new Date(now + REFRESH_TOKEN_EXPIRE_TIME))
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
 
-        // 리프레시 토큰 객체 저장
-        RefreshToken refreshTokenObject = RefreshToken.builder()
-                .id(member.getId())
-                .member(member)
-                .value(refreshToken)
-                .build();
-        refreshTokenRepository.save(refreshTokenObject);
+        log.info("Refresh Token 생성 완료 - 사용자: {}, 리프레시 토큰 만료 시간: {}", member.getNickname(), new Date(now + REFRESH_TOKEN_EXPIRE_TIME));
+
+        // 기존 리프레시 토큰 조회 및 갱신 처리
+        Optional<RefreshToken> existingToken = refreshTokenRepository.findByMember(member);
+        if (existingToken.isPresent()) {
+            // 기존 토큰 갱신
+            RefreshToken token = existingToken.get();
+            token.setValue(refreshTokenValue);
+            refreshTokenRepository.save(token);
+
+            log.info("기존 Refresh Token 갱신 - 사용자: {}, 새로운 Refresh Token: {}", member.getNickname(), refreshTokenValue);
+        } else {
+            // 새로운 토큰 생성 및 저장
+            RefreshToken refreshToken = RefreshToken.builder()
+                    .member(member)
+                    .value(refreshTokenValue)
+                    .build();
+            refreshTokenRepository.save(refreshToken);
+
+            log.info("새로운 Refresh Token 저장 - 사용자: {}, Refresh Token: {}", member.getNickname(), refreshTokenValue);
+        }
 
         // 토큰 정보 반환
-        return TokenDto.builder()
+        TokenDto tokenDto = TokenDto.builder()
                 .grantType(BEARER_PREFIX)
                 .accessToken(accessToken)
                 .accessTokenExpiresIn(accessTokenExpiresIn.getTime())
-                .refreshToken(refreshToken)
+                .refreshToken(refreshTokenValue)
                 .build();
+
+        log.info("TokenDto 생성 완료 - 사용자: {}, Access Token: {}, Refresh Token: {}",
+                member.getNickname(), accessToken, refreshTokenValue);
+
+        return tokenDto;
     }
+
+
 
     // 현재 인증된 사용자 정보 가져오기
     public Member getMemberFromAuthentication() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || AnonymousAuthenticationToken.class.isAssignableFrom(authentication.getClass())) {
+            log.warn("인증 정보가 없습니다.");
             return null; // 인증 정보가 없으면 null 반환
         }
         return ((UserDetailsImpl) authentication.getPrincipal()).getMember();

@@ -1,15 +1,16 @@
 plugins {
-    id 'java'
     id 'org.springframework.boot' version '2.7.5'
     id 'io.spring.dependency-management' version '1.0.15.RELEASE'
+    id 'java'
 }
 
 group = 'com.doosan'
 version = '0.0.1'
+sourceCompatibility = '17'
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
     }
 }
 
@@ -18,61 +19,35 @@ repositories {
 }
 
 dependencies {
-
-    implementation 'org.springframework.boot:spring-boot-starter-security'
-    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
-    // redis 추가
-
-    implementation 'javax.mail:mail:1.4.7'
-    // JavaMailApi를 직접 사용하기 위한 의존성 주입
-
-    implementation 'org.springframework:spring-context-support:5.3.9'
-    implementation group: 'org.springframework.boot', name: 'spring-boot-starter-mail', version: '2.6.3'
-
-    // h2
-    testImplementation 'com.h2database:h2'
-
-    // Spring Boot dependencies
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
-
-    // Servlet API for Spring Boot 2.x
-    implementation 'javax.servlet:javax.servlet-api:4.0.1'
-
-    // Swagger / OpenAPI
-    implementation 'io.springfox:springfox-swagger-ui:3.0.0'
-    implementation 'io.springfox:springfox-swagger2:3.0.0'
-
-    // OpenAPI alternative (SpringDoc)
-    implementation 'org.springdoc:springdoc-openapi-ui:1.6.15'
-
-    // Lombok
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
-
-    // Database
-    runtimeOnly 'com.mysql:mysql-connector-j:8.2.0'
-
-    // JWT
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
-    implementation 'com.auth0:java-jwt:3.19.2'
-
-    // AWS Support
-    implementation 'io.awspring.cloud:spring-cloud-starter-aws:2.4.2'
-
-    // Jackson (Hibernate support)
-    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-hibernate5'
-
-    // Testing
+    
+    compileOnly 'org.projectlombok:lombok'
+    runtimeOnly 'com.mysql:mysql-connector-j'
+    annotationProcessor 'org.projectlombok:lombok'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    
+    implementation 'org.springdoc:springdoc-openapi-ui:1.6.15'
+    implementation 'org.springdoc:springdoc-openapi-security:1.6.15'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+bootJar {
+    enabled = true
+    archiveFileName = 'chrismas-0.0.1.jar'
+}
+
+jar {
+    enabled = false
 }
