@@ -1,12 +1,13 @@
 package com.doosan.christmas.order.domain;
 
-import com.doosan.christmas.product.domain.Product;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
-import javax.persistence.Embeddable;
-import javax.persistence.Column;
+
 
 @Embeddable
 @Getter

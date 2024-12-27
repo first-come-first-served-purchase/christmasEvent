@@ -1,5 +1,5 @@
 plugins {
-    id 'org.springframework.boot' version '2.7.5'
+    id 'org.springframework.boot' version '3.0.0'
     id 'io.spring.dependency-management' version '1.0.15.RELEASE'
     id 'java'
 }
@@ -19,8 +19,9 @@ repositories {
 }
 
 dependencies {
-// jackson-datatype-jsr310 의존성 추가
 
+    // msa post setting
+   // implementation project(':post')
 
 
 //    lombok
