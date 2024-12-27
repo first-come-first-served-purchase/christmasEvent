@@ -16,6 +16,9 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.persistence.EntityNotFoundException;
+import javax.validation.constraints.NotNull;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -92,4 +95,21 @@ public class ProductService {
         log.info("Redis 캐시 초기화 작업 시작: 'products' 캐시 삭제 중...");
         log.info("Redis 캐시 초기화 작업 완료: 'products' 캐시가 성공적으로 삭제되었습니다.");
     }
+
+    public void restoreStock(Long productId, Long quantity) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException("상품을 찾을 수 없습니다."));
+
+        product.increaseStock(quantity);
+        productRepository.save(product);
+
+        log.info("상품 재고 복구 완료 - productId: {}, quantity: {}", productId, quantity);
+    }
+
+
+    public Product findProductById(@NotNull(message = "Product ID는 필수입니다.") Long productId) {
+        return productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다. productId=" + productId));
+    }
+
 }
