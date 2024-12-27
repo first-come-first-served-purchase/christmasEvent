@@ -1,4 +1,4 @@
-package com.doosan.christmas.common.configuration;
+package com.doosan.christmas.common.config;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -9,7 +9,7 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 import java.util.Properties;
 
 @Configuration
-public class EmailConfiguration {
+public class EmailConfig {
 
     @Value("${MAIL_USERNAME:#{null}}")
     private String mailUsername;

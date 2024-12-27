@@ -1,4 +1,4 @@
-package com.doosan.christmas.common.configuration;
+package com.doosan.christmas.common.config;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
