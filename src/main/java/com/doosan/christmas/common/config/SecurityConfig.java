@@ -1,4 +1,4 @@
-package com.doosan.christmas.common.configuration;
+package com.doosan.christmas.common.config;
 
 import com.doosan.christmas.common.jwt.AccessDeniedHandlerException;
 import com.doosan.christmas.common.jwt.AuthenticationEntryPointException;
@@ -23,7 +23,7 @@ import org.springframework.security.web.SecurityFilterChain;
 @RequiredArgsConstructor
 @ConditionalOnDefaultWebSecurity
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-public class SecurityConfiguration {
+public class SecurityConfig {
 
     @Value("${jwt.secret}")
     String SECRET_KEY; // JWT 서명에 사용할 키
@@ -31,7 +31,7 @@ public class SecurityConfiguration {
     private final UserDetailsServiceImpl userDetailsService; // 사용자 정보 로드 서비스
     private final AuthenticationEntryPointException authenticationEntryPointException; // 인증 실패 처리
     private final AccessDeniedHandlerException accessDeniedHandlerException; // 권한 실패 처리
-    private final CorsConfiguration corsConfiguration; // CORS 설정
+    private final CorsConfig corsConfiguration; // CORS 설정
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -71,7 +71,7 @@ public class SecurityConfiguration {
                 .anyRequest().authenticated()
                 .and()
                 .addFilter(corsConfiguration.corsFilter()) // CORS 필터 추가
-                .apply(new JwtSecurityConfiguration(SECRET_KEY, tokenProvider, userDetailsService)); // JWT 관련 설정 적용
+                .apply(new JwtSecurityConfig(SECRET_KEY, tokenProvider, userDetailsService)); // JWT 관련 설정 적용
         return http.build();
     }
 }
