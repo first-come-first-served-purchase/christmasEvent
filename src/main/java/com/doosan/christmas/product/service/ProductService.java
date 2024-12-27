@@ -6,6 +6,8 @@ import com.doosan.christmas.product.domain.ProductSpecification;
 import com.doosan.christmas.product.dto.responseDto.ProductPageResponseDto;
 import com.doosan.christmas.product.dto.responseDto.ProductResponseDto;
 import com.doosan.christmas.product.repository.ProductRepository;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -16,13 +18,13 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.persistence.EntityNotFoundException;
-import javax.validation.constraints.NotNull;
+
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ProductService {
+
     private final ProductRepository productRepository; // 상품 데이터를 처리하는 리포지토리
 
 

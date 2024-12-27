@@ -1,9 +1,10 @@
 package com.doosan.christmas.member.dto.requestdto;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import javax.validation.constraints.NotBlank;
+
 
 @Getter
 @NoArgsConstructor

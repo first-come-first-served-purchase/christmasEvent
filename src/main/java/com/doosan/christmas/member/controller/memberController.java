@@ -6,14 +6,15 @@ import com.doosan.christmas.member.dto.requestdto.MemberRequestDto;
 import com.doosan.christmas.member.dto.responsedto.ResponseDto;
 import com.doosan.christmas.member.service.MemberService;
 import com.doosan.christmas.common.shared.Authority;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.validation.Valid;
+
 import java.util.List;
 
 @Slf4j
@@ -79,4 +80,6 @@ public class memberController {
         log.info("회원 탈퇴 처리 완료: {}", result);
         return result;
     }
+
+
 }

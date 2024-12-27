@@ -1,7 +1,8 @@
 package com.doosan.christmas.member.domain;
 
+import jakarta.persistence.*;
 import lombok.*;
-import javax.persistence.*;
+
 
 @Getter
 @NoArgsConstructor

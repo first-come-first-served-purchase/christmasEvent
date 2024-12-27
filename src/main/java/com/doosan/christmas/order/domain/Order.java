@@ -3,8 +3,9 @@ package com.doosan.christmas.order.domain;
 import com.doosan.christmas.member.domain.Member;
 import com.doosan.christmas.product.domain.Product;
 import com.doosan.christmas.order.shared.OrderStatus;
+import jakarta.persistence.*;
 import lombok.*;
-import javax.persistence.*;
+
 import java.time.LocalDateTime;
 
 @Entity
