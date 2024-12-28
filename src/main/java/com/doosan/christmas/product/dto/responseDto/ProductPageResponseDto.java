@@ -1,20 +1,24 @@
 package com.doosan.christmas.product.dto.responseDto;
 
 import com.doosan.christmas.product.domain.Product;
-import lombok.Builder;
-import lombok.Getter;
+import lombok.*;
 import org.springframework.data.domain.Page;
+
+import java.io.Serial;
+import java.io.Serializable;
 import java.util.List;
 import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
-import lombok.AccessLevel;
 
 @Getter
 @Builder
 @AllArgsConstructor
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class ProductPageResponseDto {
+@NoArgsConstructor // 기본 생성자는 default 접근 수준으로 설정
+@EqualsAndHashCode
+public class ProductPageResponseDto implements Serializable {
+
+    @Serial
+    private static final long serialVersionUID = 1L;
+
     private List<ProductResponseDto> products; // 상품 목록
     private int currentPage; // 현재 페이지 번호
     private int totalPages; // 전체 페이지 수
