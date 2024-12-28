@@ -7,11 +7,16 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.AccessLevel;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
 @Entity // 엔티티 클래스 정의
 @Getter // Getter 자동 생성
+@Table(name = "wish_list")
+@EntityListeners(AuditingEntityListener.class)
 @NoArgsConstructor(access = AccessLevel.PROTECTED) // 기본 생성자 접근 제한
 public class WishList {
 
@@ -30,11 +35,24 @@ public class WishList {
     @Column(nullable = false) // 수량 필드, 필수값 설정
     private Long quantity;
 
-    @Column(nullable = false) // 생성 시각 필드, 필수값 설정
+    @Column(name = "created_at", nullable = false, updatable = false)
+    @CreatedDate
     private LocalDateTime createdAt;
 
-    @Column(nullable = false) // 수정 시각 필드, 필수값 설정
+    @Column(name = "modified_at", nullable = false)
+    @LastModifiedDate
     private LocalDateTime modifiedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.modifiedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.modifiedAt = LocalDateTime.now();
+    }
 
     @Builder // Builder 패턴으로 객체 생성
     public WishList(Member member, Product product, Long quantity) {

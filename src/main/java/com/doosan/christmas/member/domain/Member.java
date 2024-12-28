@@ -15,6 +15,7 @@ import java.util.Objects;
 @Builder
 @Getter
 @Setter
+@Table(name = "member")
 @NoArgsConstructor // 기본 생성자
 @AllArgsConstructor // 모든 필드를 포함한 생성자
 @Entity // JPA 엔티티 매핑
@@ -36,6 +37,7 @@ public class Member extends Timestamped implements Serializable { // 생성/수�
     @Column(nullable = false) // 필수 값
     private String password; // 회원 비밀번호
 
+    @Column(name="is_deleted")
     @JsonIgnore // JSON 출력에서 제외
     @Builder.Default // 기본값 설정
     private boolean isDeleted = Boolean.FALSE; // 삭제 여부
@@ -53,7 +55,7 @@ public class Member extends Timestamped implements Serializable { // 생성/수�
     }
 
     @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "Member_roles", joinColumns = @JoinColumn(name = "Member_id"))
+    @CollectionTable(name = "member_roles", joinColumns = @JoinColumn(name = "member_id"))
     @Column(name = "roles") // "roles" 컬럼만 사용
     @Builder.Default
     private List<String> roles = new ArrayList<>();

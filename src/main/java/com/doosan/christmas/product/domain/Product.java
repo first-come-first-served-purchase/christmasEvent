@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 @Entity
 @Getter
 @Builder
+@Table(name = "product")
 @NoArgsConstructor
 @AllArgsConstructor
 @Slf4j
@@ -25,30 +26,45 @@ public class Product {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id; // 상품 ID
 
-    private String name; // 상품 이름
+    @Column(name = "product_name", nullable = false)
+    private String productName;
 
+
+    @Column(name = "description", length = 255)
     private String description; // 상품 설명
 
+    @Column(name = "price", precision = 38, scale = 2, nullable = false)
     private BigDecimal price; // 상품 가격
 
+    @Column(name = "stock", nullable = false)
     private Long stock; // 재고 수량
 
+    @Column(name = "image_url") // 테이블의 image_url 컬럼과 매핑
     private String imageUrl; // 상품 이미지 URL
 
+    @Column(name = "is_active") // 테이블의 is_active 컬럼과 매핑
     private Boolean isActive; // 상품 활성 상태
 
+    @Column(name = "category")
     @Enumerated(EnumType.STRING) // Enum 타입을 문자열로 저장
     private ProductCategory category; // 상품 카테고리
 
+    @Column(name = "created_at", updatable = false)
     @CreatedDate
     private LocalDateTime createdAt; // 생성시간
 
+    @Column(name = "modified_at")
     @LastModifiedDate
     private LocalDateTime modifiedAt; // 수정시간
 
+
+    public String getName() {
+        return this.productName; // productName 반환
+    }
+
     public void increaseStock(Long quantity) {
         if (quantity <= 0) {
-            throw new IllegalArgumentException("Quantity must be greater than zero");
+            throw new IllegalArgumentException("수량은 0 보다 커야 합니다.");
         }
 
         // 현재 재고 상태와 추가할 수량을 로깅
