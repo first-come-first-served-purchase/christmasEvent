@@ -41,37 +41,39 @@ public class SecurityConfig {
     @Bean
     @Order(SecurityProperties.BASIC_AUTH_ORDER)
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http.cors(); // CORS 설정 활성화
-        http.csrf().disable() // CSRF 보호 비활성화
-                .exceptionHandling()
-                .authenticationEntryPoint(authenticationEntryPointException) // 인증 실패 시 처리
-                .accessDeniedHandler(accessDeniedHandlerException) // 권한 실패 시 처리
-                .and()
-                .sessionManagement()
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS) // 세션을 사용하지 않는 Stateless 방식 설정
-                .and()
-                .authorizeRequests()
-                .requestMatchers("/v1/users/**").permitAll() // 특정 경로 모두 허용
-                .requestMatchers("/v1/members/**").permitAll() // 특정 경로 모두 허용
-                .requestMatchers("/v1/products/**").permitAll() // 특정 경로 모두 허용
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .requestMatchers("/v1/users/signup/admin").hasAuthority("ROLE_ADMIN") // 관리자만 접근
-                .requestMatchers("/v1/users/signup/seller").hasAuthority("ROLE_ADMIN") // 관리자만 접근
-                .requestMatchers("/v1/auth/**").permitAll()
-                .requestMatchers( // Swagger 관련 경로 허용
-                        "/v2/api-docs",
-                        "/swagger-resources",
-                        "/swagger-resources/**",
-                        "/configuration/ui",
-                        "/configuration/security",
-                        "/swagger-ui.html",
-                        "/webjars/**",
-                        "/v3/api-docs/**",
-                        "/swagger-ui/**").permitAll()
-                .anyRequest().authenticated()
-                .and()
-                .addFilter(corsConfiguration.corsFilter()) // CORS 필터 추가
-                .apply(new JwtSecurityConfig(SECRET_KEY, tokenProvider, userDetailsService)); // JWT 관련 설정 적용
+        http.cors();
+        http.csrf().disable()
+            .exceptionHandling()
+            .authenticationEntryPoint(authenticationEntryPointException)
+            .accessDeniedHandler(accessDeniedHandlerException)
+            .and()
+            .sessionManagement()
+            .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and()
+            .authorizeHttpRequests()
+            // Swagger UI 접근을 가장 먼저 허용
+            .requestMatchers(
+                "/",
+                "/swagger-ui/**",
+                "/v3/api-docs/**",
+                "/swagger-resources/**",
+                "/swagger-ui.html",
+                "/webjars/**",
+                "/favicon.ico",
+                "/error"
+            ).permitAll()
+            // 나머지 API 경로 설정
+            .requestMatchers("/v1/users/**").permitAll()
+            .requestMatchers("/v1/members/**").permitAll()
+            .requestMatchers("/v1/products/**").permitAll()
+            .requestMatchers("/v1/auth/**").permitAll()
+            .requestMatchers("/v1/users/signup/admin").hasAuthority("ROLE_ADMIN")
+            .requestMatchers("/v1/users/signup/seller").hasAuthority("ROLE_ADMIN")
+            .anyRequest().authenticated();
+
+        // JwtSecurityConfig 적용
+        http.apply(new JwtSecurityConfig(SECRET_KEY, tokenProvider, userDetailsService));
+
         return http.build();
     }
 }
