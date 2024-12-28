@@ -1,1 +1,3 @@
-rootProject.name = 'chrismas'
+rootProject.name = 'christmasEvent'
+include 'christmas-api'
+include 'christmas-common'
