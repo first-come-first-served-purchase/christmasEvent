@@ -22,7 +22,8 @@ public enum ErrorCode {
     VERIFICATION_EXPIRED(HttpStatus.BAD_REQUEST, "인증 코드가 만료되었습니다."),
     INVALID_VERIFICATION_CODE(HttpStatus.BAD_REQUEST, "잘못된 인증 코드입니다."),
     UNAUTHORIZED_ADMIN_ACCESS(HttpStatus.FORBIDDEN, "관리자 권한이 필요합니다."),
-    MEMBER_BLOCKED(HttpStatus.FORBIDDEN, "차단된 회원입니다.");
+    MEMBER_BLOCKED(HttpStatus.FORBIDDEN, "차단된 회원입니다."),
+    INVALID_INPUT_VALUE(HttpStatus.BAD_REQUEST, "필수 입력값이 누락되었습니다.");
 
     private final HttpStatus status;
     private final String message;

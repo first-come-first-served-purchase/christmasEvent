@@ -1,0 +1,17 @@
+bootJar { enabled = false }
+jar { enabled = true }
+
+dependencies {
+    // 핵심 의존성만 유지
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // JSON 처리
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    
+    // spring-web
+    implementation 'org.springframework:spring-web'
+} 
