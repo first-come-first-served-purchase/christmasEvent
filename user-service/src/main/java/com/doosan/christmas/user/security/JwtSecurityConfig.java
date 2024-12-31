@@ -1,6 +1,7 @@
 package com.doosan.christmas.user.security;
 
-import com.doosan.christmas.common.jwt.JwtTokenProvider;
+
+import com.doosan.christmas.user.config.JwtTokenProvider;
 import com.doosan.christmas.user.service.RedisService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.config.annotation.SecurityConfigurerAdapter;
