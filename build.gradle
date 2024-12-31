@@ -1,6 +1,7 @@
 buildscript {
     ext {
         springBootVersion = '3.0.0'
+        springCloudVersion = '2022.0.0'
     }
     repositories {
         mavenCentral()
@@ -18,7 +19,7 @@ plugins {
 allprojects {
     group = 'com.doosan'
     version = '0.0.1-SNAPSHOT'
-    
+
     repositories {
         mavenCentral()
     }
@@ -29,7 +30,25 @@ subprojects {
     apply plugin: 'org.springframework.boot'
     apply plugin: 'io.spring.dependency-management'
 
+    group = 'com.doosan.christmas'
+    version = '0.0.1-SNAPSHOT'
     sourceCompatibility = '17'
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+        }
+    }
+
+    dependencies {
+        // 공통 의존성 설정
+        implementation 'org.springframework.boot:spring-boot-starter'
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    }
 
     test {
         useJUnitPlatform()

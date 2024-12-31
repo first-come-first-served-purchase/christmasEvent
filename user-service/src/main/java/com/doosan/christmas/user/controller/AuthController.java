@@ -31,8 +31,7 @@ public class AuthController {
     @PostMapping("/signup")
     public ResponseDto<Void> signup(@Valid @RequestBody SignupRequest request) {
         log.debug("Received signup request for email: {}", request.getEmail());
-        Member member = request.toEntity();
-        authService.signup(member);
+        authService.signup(request);
         return ResponseDto.success(null);
     }
     

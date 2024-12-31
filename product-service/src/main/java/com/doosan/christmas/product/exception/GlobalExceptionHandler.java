@@ -17,7 +17,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CustomException.class)
     public ResponseDto<Void> handleCustomException(CustomException e) {
         log.error("CustomException: {}", e.getMessage());
-        return ResponseDto.fail(e.getErrorCode(), e.getErrorCode().getMessage());
+        return ResponseDto.fail(e.getErrorCode().getCode(), e.getErrorCode().getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -28,13 +28,13 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
                 .findFirst()
                 .orElse("유효성 검사 실패");
-        return ResponseDto.fail(ErrorCode.INVALID_INPUT_VALUE, errorMessage);
+        return ResponseDto.fail(ErrorCode.INVALID_INPUT_VALUE.getCode(), errorMessage);
     }
 
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ResponseDto<Void> handleException(Exception e) {
         log.error("Unexpected error occurred", e);
-        return ResponseDto.fail(ErrorCode.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다.");
+        return ResponseDto.fail(ErrorCode.INTERNAL_SERVER_ERROR.getCode(), "서버 내부 오류가 발생했습니다.");
     }
-} 
+}

@@ -71,16 +71,22 @@ public class AuthService {
         return true;
     }
 
-    public void signup(Member member) {
-        if (!redisService.isEmailVerified(member.getEmail())) {
+    public void signup(SignupRequest request) {
+        if (!redisService.isEmailVerified(request.getEmail())) {
             throw new CustomException(ErrorCode.EMAIL_NOT_VERIFIED);
         }
         
-        if (memberRepository.existsByEmail(member.getEmail())) {
+        if (memberRepository.existsByEmail(request.getEmail())) {
             throw new CustomException(ErrorCode.DUPLICATE_EMAIL);
         }
         
-        member.encodePassword(passwordEncoder);
+        String encodedPassword = passwordEncoder.encode(request.getPassword());
+        Member member = Member.builder()
+                .email(request.getEmail())
+                .password(encodedPassword)
+                .name(request.getName())
+                .role(Role.ROLE_USER)
+                .build();
         memberRepository.save(member);
     }
 

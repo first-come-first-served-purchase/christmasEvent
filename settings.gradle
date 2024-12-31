@@ -1,3 +1,8 @@
 rootProject.name = 'christmasEvent'
-include 'christmas-api'
-include 'christmas-common'
+
+include 'eureka-server'
+include 'gateway-service'
+include 'common'
+include 'user-service'
+include 'order-service'
+include 'product-service'
