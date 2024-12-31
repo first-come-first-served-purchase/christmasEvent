@@ -1,58 +1,45 @@
 package com.doosan.christmas.gateway.config;
 
-import com.doosan.christmas.common.jwt.JwtAuthenticationFilter;
-import com.doosan.christmas.common.jwt.JwtTokenProvider;
-import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
-import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
-import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
-import org.springframework.security.authentication.ReactiveAuthenticationManager;
-import org.springframework.security.core.Authentication;
-import reactor.core.publisher.Mono;
-import org.springframework.http.HttpMethod;
-import com.doosan.christmas.gateway.filter.AuthenticationFilter;
 
 @Configuration
 @EnableWebFluxSecurity
-@RequiredArgsConstructor
 public class GatewaySecurityConfig {
-
-    private final JwtTokenProvider jwtTokenProvider;
-    private final AuthenticationFilter authenticationFilter;
 
     @Bean
     public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
-        return http
-            .csrf(ServerHttpSecurity.CsrfSpec::disable)
-            .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
-            .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
-            .authorizeExchange(exchanges -> exchanges
-                .pathMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
-                .pathMatchers(HttpMethod.POST, "/api/v1/auth/register").permitAll()
-                .pathMatchers(HttpMethod.POST, "/api/v1/auth/refresh").permitAll()
-                .pathMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
-                .pathMatchers(HttpMethod.POST, "/order-service/api/v1/auth/**").permitAll()
-                .pathMatchers(HttpMethod.POST, "/order-service/**").permitAll()
-                .pathMatchers(HttpMethod.POST, "/api/v1/users/**").permitAll()
-                .pathMatchers(HttpMethod.GET, "/api/v1/users/**").permitAll()
-                .pathMatchers(HttpMethod.POST, "/api/v1/orders/**").permitAll()
-                .pathMatchers(HttpMethod.GET, "/api/v1/orders/**").permitAll()
-                .pathMatchers(HttpMethod.POST, "/api/v1/ok/**").permitAll()
-                .pathMatchers(HttpMethod.GET, "/api/v1/ok/**").permitAll()
-                .pathMatchers("/actuator/**").permitAll()
-                .anyExchange().authenticated()
-            )
-            .addFilterAt(authenticationFilter, SecurityWebFiltersOrder.AUTHENTICATION)
-            .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
-            .build();
-    }
+        http
+                .csrf(csrf -> csrf.disable())
+                .authorizeExchange(exchange -> exchange
+                        // 인증 관련
+                        .pathMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/v1/auth/register").permitAll()
 
-    @Bean
-    public ReactiveAuthenticationManager reactiveAuthenticationManager() {
-        return authentication -> Mono.just(authentication);
+                        // 상품 서비스 - 조회 허용
+                        .pathMatchers(HttpMethod.GET, "/product-service/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
+
+                        // 주문 서비스 - 두 경로 모두 허용
+                        .pathMatchers(HttpMethod.POST, "/order-service/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/order-service/**").permitAll()
+                        .pathMatchers(HttpMethod.PUT, "/order-service/**").permitAll()
+                        .pathMatchers(HttpMethod.DELETE, "/order-service/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/v1/orders/**").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/api/v1/orders/**").permitAll()
+                        .pathMatchers(HttpMethod.PUT, "/api/v1/orders/**").permitAll()
+                        .pathMatchers(HttpMethod.DELETE, "/api/v1/orders/**").permitAll()
+
+                        // 모니터링
+                        .pathMatchers("/actuator/**").permitAll()
+
+                        .anyExchange().authenticated()
+                );
+
+        return http.build();
     }
-} 
+}
