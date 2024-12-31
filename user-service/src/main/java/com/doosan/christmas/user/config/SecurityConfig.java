@@ -1,6 +1,7 @@
 package com.doosan.christmas.user.config;
 
-import com.doosan.christmas.common.jwt.JwtTokenProvider;
+
+
 import com.doosan.christmas.user.security.JwtSecurityConfig;
 import com.doosan.christmas.user.service.RedisService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,8 @@ public class SecurityConfig {
             .authorizeHttpRequests()
             .requestMatchers(
                 "/api/auth/signup",
+                "/api/v1/users/**",
+                "/api/v1/auth/login",
                 "/api/auth/login",
                 "/api/auth/email",
                 "/api/auth/verify-code",
@@ -51,4 +54,4 @@ public class SecurityConfig {
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-} 
+}
