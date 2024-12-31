@@ -1,0 +1,34 @@
+dependencies {
+    implementation project(':common')
+
+    // feign - client
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+    // Spring Boot Starters
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    
+    // JWT
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+    
+    // Database
+    implementation 'mysql:mysql-connector-java'
+    
+    // Eureka Client
+    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+    
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    
+    // 이메일 전송을 위한 의존성 추가
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+    
+    // Redis 사용을 위한 의존성도 필요합니다
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+} 
