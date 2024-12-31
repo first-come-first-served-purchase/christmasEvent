@@ -1,6 +1,7 @@
 package com.doosan.christmas.gateway;
 
-import com.doosan.christmas.common.config.JwtConfig;
+
+import com.doosan.christmas.gateway.config.JwtConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
