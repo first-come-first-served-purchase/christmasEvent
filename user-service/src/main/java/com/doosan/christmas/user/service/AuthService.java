@@ -5,6 +5,7 @@ import com.doosan.christmas.common.exception.ErrorCode;
 import com.doosan.christmas.user.domain.Member;
 import com.doosan.christmas.user.domain.Role;
 import com.doosan.christmas.user.dto.SignupRequest;
+import com.doosan.christmas.user.dto.UserResponse;
 import com.doosan.christmas.user.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -140,6 +141,7 @@ public class AuthService {
         }
     }
 
+    // 로그아웃
     public void logout(String accessToken) {
         // 토큰 유효성 검증
         if (!tokenProvider.validateToken(accessToken)) {
@@ -156,5 +158,12 @@ public class AuthService {
         // 해당 액세스 토큰을 블랙리스트에 추가 (로그아웃 처리)
         long expiration = tokenProvider.getExpirationTime(accessToken);
         redisService.addToBlacklist(accessToken, expiration);
+    }
+
+    // 유저 정보 조회
+    public UserResponse getUserById(Long userId) {
+        Member member = memberRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        return new UserResponse(member.getId(), member.getName(), member.getEmail());
     }
 }

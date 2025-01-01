@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -13,7 +15,7 @@ public class UserResponse {
     private Long id;
     private String email;
     private String name;
-    private String nickname;
-    private String phoneNumber;
-    private String address;
+    private String role;
+    private LocalDateTime createdAt;
+    private LocalDateTime modifiedAt;
 } 

@@ -18,6 +18,8 @@ public class GatewaySecurityConfig {
                 .authorizeExchange(exchange -> exchange
                         // 인증 관련
                         .pathMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                        .pathMatchers(HttpMethod.GET, "/api/v1/auth/user/**").permitAll()
+
                         .pathMatchers(HttpMethod.POST, "/api/v1/auth/register").permitAll()
 
                         // 상품 서비스 - 조회 허용

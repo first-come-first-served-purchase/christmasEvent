@@ -1,6 +1,7 @@
 package com.doosan.christmas.order.config;
 
 import feign.RequestInterceptor;
+import feign.codec.ErrorDecoder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,6 +15,11 @@ public class FeignClientConfig {
     private String serviceToken;
 
     @Bean
+    public ErrorDecoder errorDecoder() {
+        return new FeignErrorDecoder();
+    }
+
+    @Bean
     public RequestInterceptor requestInterceptor() {
         return requestTemplate -> {
             ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
@@ -21,11 +27,7 @@ public class FeignClientConfig {
                 String token = attributes.getRequest().getHeader("Authorization");
                 if (token != null) {
                     requestTemplate.header("Authorization", token);
-                } else {
-                    requestTemplate.header("Authorization", "Bearer " + serviceToken);
                 }
-            } else {
-                requestTemplate.header("Authorization", "Bearer " + serviceToken);
             }
         };
     }

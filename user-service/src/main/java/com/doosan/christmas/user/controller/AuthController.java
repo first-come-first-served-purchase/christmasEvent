@@ -4,18 +4,14 @@ import com.doosan.christmas.common.dto.ResponseDto;
 import com.doosan.christmas.common.exception.CustomException;
 import com.doosan.christmas.common.exception.ErrorCode;
 import com.doosan.christmas.user.domain.Member;
-import com.doosan.christmas.user.dto.EmailRequest;
-import com.doosan.christmas.user.dto.SignupRequest;
-import com.doosan.christmas.user.dto.VerifyEmailRequest;
+import com.doosan.christmas.user.dto.*;
 import com.doosan.christmas.user.service.AuthService;
 import com.doosan.christmas.user.security.TokenProvider;
-import com.doosan.christmas.user.dto.TokenDto;
-import com.doosan.christmas.user.dto.LoginRequest;
 import com.doosan.christmas.user.service.RedisService;
-import com.doosan.christmas.user.dto.TokenRefreshRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -27,7 +23,12 @@ public class AuthController {
     private final AuthService authService;
     private final TokenProvider tokenProvider;
     private final RedisService redisService;
-    
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<UserResponse> getUserById(@PathVariable Long userId) {
+        return ResponseEntity.ok(authService.getUserById(userId));
+    }
+
     @PostMapping("/signup")
     public ResponseDto<Void> signup(@Valid @RequestBody SignupRequest request) {
         log.debug("Received signup request for email: {}", request.getEmail());
