@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-
+@ToString
 @Entity
 @Table(name = "orders")
 @Getter
@@ -27,19 +27,25 @@ public class Order extends BaseTimeEntity {
     @Column(precision = 10, scale = 2)
     private BigDecimal totalPrice;
 
+    @Column(name = "product_name", nullable = false)
+    private String productName;
+
     @Enumerated(EnumType.STRING)
     private OrderStatus status;
 
     private LocalDateTime deliveryStartDate;
     private LocalDateTime deliveryCompleteDate;
 
+
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
     private List<OrderItem> orderItems = new ArrayList<>();
 
     @Builder
-    public Order(Long userId, Long productId, Integer quantity, BigDecimal totalPrice) {
+    public Order(Long userId, Long productId, String productName, Integer quantity, BigDecimal totalPrice) {
         this.userId = userId;
         this.productId = productId;
+        this.productName = productName;
         this.quantity = quantity;
         this.totalPrice = totalPrice;
         this.status = OrderStatus.ORDER_RECEIVED;
