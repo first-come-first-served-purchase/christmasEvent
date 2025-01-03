@@ -1,1 +1,8 @@
-rootProject.name = 'chrismas'
+rootProject.name = 'christmasEvent'
+
+include 'eureka-server'
+include 'gateway-service'
+include 'common'
+include 'user-service'
+include 'order-service'
+include 'product-service'

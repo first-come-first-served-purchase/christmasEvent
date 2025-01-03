@@ -22,22 +22,37 @@ public class Order extends Timestamp {
     @JoinColumn(name = "member_id", nullable = false)
     private Member member;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id", nullable = false) // Product와 관계 추가
+    private Product product;
+
     @Embedded
-    private OrderSnapshot orderSnapshot;
+    @AttributeOverrides({
+            @AttributeOverride(name = "productId", column = @Column(name = "order_snapshot_product_id")),
+            @AttributeOverride(name = "productName", column = @Column(name = "order_snapshot_product_name")),
+            @AttributeOverride(name = "description", column = @Column(name = "order_snapshot_description")),
+            @AttributeOverride(name = "price", column = @Column(name = "order_snapshot_price")),
+            @AttributeOverride(name = "imageUrl", column = @Column(name = "order_snapshot_image_url")),
+            @AttributeOverride(name = "quantity", column = @Column(name = "order_snapshot_quantity"))
+    })
+    private OrderSnapshot orderSnapshot = new OrderSnapshot(); // 기본값 추가
+
+
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private OrderStatus status = OrderStatus.ORDER_RECEIVED;
 
-    @Column
+    @Column(name = "delivery_start_date")
     private LocalDateTime deliveryStartDate;
 
-    @Column
+    @Column(name = "delivery_complete_date")
     private LocalDateTime deliveryCompleteDate;
 
     @Builder
     public Order(Member member, Product product, Long quantity) {
         this.member = member;
+        this.product = product; // 관계 설정
         this.orderSnapshot = new OrderSnapshot(
                 product.getId(),
                 product.getName(),
@@ -48,6 +63,7 @@ public class Order extends Timestamp {
         this.orderSnapshot.setQuantity(quantity != null ? quantity : 0L);
         this.status = OrderStatus.ORDER_RECEIVED;
     }
+
 
 
     public void startDelivery() {

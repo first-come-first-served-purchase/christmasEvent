@@ -1,3 +1,4 @@
+/*
 package com.doosan.christmas.member.controller;
 
 import com.doosan.christmas.member.dto.requestdto.EmailAuthRequestDTO;
@@ -14,21 +15,19 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
     private final MemberService memberService;
 
-    /**
-     * 이메일로 인증 코드 발송
-     */
+
     @PostMapping("/email")
     public ResponseDto<?> sendEmailAuth(@RequestBody EmailAuthRequestDTO requestDTO) {
         log.info("이메일 인증 코드 발송 요청 - 이메일: {}", requestDTO.getEmail());
         return memberService.sendEmailAuth(requestDTO);
     }
 
-    /**
-     * 인증 코드 확인
-     */
+
     @PostMapping("/verify-code")
     public ResponseDto<?> verifyEmailCode(@RequestBody EmailAuthRequestDTO requestDTO) {
         log.info("인증 코드 검증 요청: {}", requestDTO);
         return memberService.verifyEmailCode(requestDTO);
     }
 }
+
+*/

@@ -9,6 +9,7 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 @Entity
+@Table(name="refresh_token")
 public class RefreshToken {
 
     @Id

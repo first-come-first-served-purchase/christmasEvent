@@ -3,6 +3,7 @@ package com.doosan.christmas.wishlist.service;
 import com.doosan.christmas.member.domain.Member;
 import com.doosan.christmas.member.repository.MemberRepository;
 import com.doosan.christmas.product.domain.Product;
+import com.doosan.christmas.product.dto.responseDto.ResponseDto;
 import com.doosan.christmas.product.service.ProductService;
 import com.doosan.christmas.wishlist.domain.WishList;
 import com.doosan.christmas.wishlist.dto.requestDto.WishListRequestDto;
@@ -93,9 +94,17 @@ public class WishListService {
      *
      * @param memberId 회원 ID
      * @param productId 삭제할 상품의 ID
+     * @return 삭제 결과 응답 DTO
      */
     @Transactional
-    public void removeFromWishList(Long memberId, Long productId) {
+    public ResponseDto<?> removeFromWishList(Long memberId, Long productId) {
+        if (!wishListRepository.existsByMemberIdAndProductId(memberId, productId)) {
+            throw new EntityNotFoundException("삭제하려는 위시리스트 항목을 찾을 수 없습니다.");
+        }
+
         wishListRepository.deleteByMemberIdAndProductId(memberId, productId);
+        log.info("위시 리스트에서 상품 삭제 - memberId: {}, productId: {}", memberId, productId);
+        return ResponseDto.success("위시리스트가 삭제되었습니다.");
     }
+
 }
