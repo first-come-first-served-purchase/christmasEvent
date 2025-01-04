@@ -1,17 +1,16 @@
-package com.doosan.christmas.member.dto.requestdto;
+package com.doosan.userservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class EmailAuthRequestDTO {
+public class EmailAuthRequestDto {
     private String email;
-    
+
     @JsonProperty("authCode")
     private String authCode;
 }
-
