@@ -19,11 +19,6 @@ public class RedisUtil {
         log.info("Redis 데이터 저장: key={}, value={}, expire={}초", key, value, duration);
     }
 
-    public void setData(String key, String value) {
-        redisTemplate.opsForValue().set(key, value);
-        log.info("Redis 데이터 저장: key={}, value={}", key, value);
-    }
-
     public String getData(String key) {
         String value = redisTemplate.opsForValue().get(key);
         log.info("Redis 데이터 조회: key={}, value={}", key, value);
