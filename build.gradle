@@ -1,56 +1,47 @@
-buildscript {
-    ext {
-        springBootVersion = '3.0.0'
-        springCloudVersion = '2022.0.0'
-    }
-    repositories {
-        mavenCentral()
-    }
-    dependencies {
-        classpath "org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}"
-    }
-}
-
 plugins {
-    id 'org.springframework.boot' version '3.0.0' apply false
-    id 'io.spring.dependency-management' version '1.1.0' apply false
+    id 'java'
+    id 'io.spring.dependency-management' version '1.1.6'
 }
 
-allprojects {
-    group = 'com.doosan'
-    version = '0.0.1-SNAPSHOT'
+group = 'com.doosan'
+version = '0.0.1-SNAPSHOT'
 
-    repositories {
-        mavenCentral()
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
     }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
 }
 
 subprojects {
     apply plugin: 'java'
-    apply plugin: 'org.springframework.boot'
     apply plugin: 'io.spring.dependency-management'
-
-    group = 'com.doosan.christmas'
-    version = '0.0.1-SNAPSHOT'
-    sourceCompatibility = '17'
 
     repositories {
         mavenCentral()
     }
 
-    dependencyManagement {
-        imports {
-            mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
-        }
-    }
-
     dependencies {
-        // 공통 의존성 설정
-        implementation 'org.springframework.boot:spring-boot-starter'
+        compileOnly 'org.projectlombok:lombok'
+        annotationProcessor 'org.projectlombok:lombok'
+
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     }
 
-    test {
+    tasks.named('test') {
         useJUnitPlatform()
     }
 }

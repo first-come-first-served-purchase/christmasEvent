@@ -1,4 +1,0 @@
-jwt:
-  secret: ${JWT_SECRET:c3ByaW5nLWJvb3Qtc2VjdXJpdHktand0LXR1dG9yaWFsLWppd29vbi1zcHJpbmctYm9vdC1zZWN1cml0eS1qd3QtdHV0b3JpYWwtc3ByaW5nLWJvb3Qtc2VjdXJpdHktand0LXR1dG9yaWFsCg==}
-  access-token-validity-in-seconds: ${JWT_ACCESS_TOKEN_VALIDITY:3600}
-  refresh-token-validity-in-seconds: ${JWT_REFRESH_TOKEN_VALIDITY:604800} 
