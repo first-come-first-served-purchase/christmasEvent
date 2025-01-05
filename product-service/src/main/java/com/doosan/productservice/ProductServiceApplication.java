@@ -1,10 +1,15 @@
-package com.doosan.christmas.product;
+package com.doosan.productservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
-@SpringBootApplication
+@SpringBootApplication(
+    scanBasePackages = {
+        "com.doosan.productservice",
+        "com.doosan.common.exception"
+    }
+)
 @EnableDiscoveryClient
 public class ProductServiceApplication {
     public static void main(String[] args) {
