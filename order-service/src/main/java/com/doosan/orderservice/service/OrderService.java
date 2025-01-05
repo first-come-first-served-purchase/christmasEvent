@@ -4,6 +4,8 @@ import com.doosan.common.dto.ResponseDto;
 import com.doosan.common.dto.order.CreateOrderReqDto;
 import com.doosan.orderservice.dto.CreateOrderResDto;
 import com.doosan.orderservice.dto.OrderStatusUpdateRequest;
+import com.doosan.orderservice.dto.WishListDto;
+import com.doosan.orderservice.dto.WishListOrderResponseDto;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
@@ -14,4 +16,9 @@ public interface OrderService {
     ResponseEntity<ResponseDto<Void>> requestReturn(int userId, int orderId);
     ResponseEntity<?> updateOrderStatus(OrderStatusUpdateRequest request);
     void updateOrderStatus();
+    ResponseEntity<ResponseDto<List<WishListDto>>> getWishList(int userId);
+    ResponseEntity<ResponseDto<Void>> addToWishList(int userId, Long productId, int quantity);
+    ResponseEntity<ResponseDto<Void>> updateWishListItem(int userId, Long productId, int quantity);
+    ResponseEntity<ResponseDto<Void>> removeFromWishList(int userId, Long productId);
+    ResponseEntity<ResponseDto<WishListOrderResponseDto>> orderFromWishList(int userId, List<Long> productIds);
 }

@@ -1,17 +1,17 @@
 package com.doosan.orderservice.service;
 
-
 import com.doosan.common.dto.ResponseDto;
-import com.doosan.common.dto.ResponseMessage;
 import com.doosan.common.dto.order.CreateOrderReqDto;
 import com.doosan.common.exception.BusinessRuntimeException;
-import com.doosan.orderservice.dto.CreateOrderResDto;
-import com.doosan.orderservice.dto.OrderStatusUpdateRequest;
+import com.doosan.orderservice.dto.*;
 import com.doosan.orderservice.entity.Order;
 import com.doosan.orderservice.entity.OrderItem;
 import com.doosan.orderservice.entity.OrderStatus;
+import com.doosan.orderservice.entity.WishList;
 import com.doosan.orderservice.repository.OrderItemRepository;
 import com.doosan.orderservice.repository.OrderRepository;
+import com.doosan.orderservice.repository.WishListRepository;
+import com.doosan.productservice.dto.ProductResponse;
 import com.doosan.productservice.service.ProductService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +38,9 @@ public class OrderServiceImpl implements OrderService {
     private final ProductService productService;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
+    private final WishListRepository wishListRepository;
 
+    // 주문 하기
     @Override
     @Transactional
     public CreateOrderResDto createOrder(int userId, List<CreateOrderReqDto> orderItems) {
@@ -59,6 +61,7 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    // 주문 생성 , 저장
     private Order createAndSaveOrder(int userId) {
         Order order = new Order();
         order.setUserId(userId);
@@ -68,6 +71,7 @@ public class OrderServiceImpl implements OrderService {
         return saveOrder(order);
     }
 
+    // 주문 저장
     private Order saveOrder(Order order) {
         try {
             return orderRepository.save(order);
@@ -80,6 +84,7 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    // 주문 아이템의 총 금액을 계산
     private int calculateTotalPrice(Order order, List<CreateOrderReqDto> orderItems) {
         List<CompletableFuture<Integer>> futureList = orderItems.stream()
                 .map(item -> CompletableFuture.supplyAsync(() -> processOrderItem(order.getId(), item)))
@@ -101,6 +106,7 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    // 주문 아이템 처리
     private int processOrderItem(int orderId, CreateOrderReqDto item) {
         OrderItem orderItem = createAndSaveOrderItem(orderId, item);
 
@@ -120,6 +126,7 @@ public class OrderServiceImpl implements OrderService {
 
 
 
+    // 주문한 상품의 재고 업데이트
     private void updateProductStock(CreateOrderReqDto quantity) {
         try {
             productService.updateStock(quantity);
@@ -131,6 +138,8 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessRuntimeException("재고 업데이트 중 예기치 않은 오류가 발생했습니다.", e);
         }
     }
+
+    // 주문 항목 생성 및 저장
     private OrderItem createAndSaveOrderItem(int orderId, CreateOrderReqDto item) {
         OrderItem orderItem = new OrderItem();
         orderItem.setOrderId(orderId);
@@ -140,6 +149,7 @@ public class OrderServiceImpl implements OrderService {
         return saveOrderItem(orderItem);
     }
 
+    // 주문 항목 저장
     private OrderItem saveOrderItem(OrderItem orderItem) {
         try {
             return orderItemRepository.save(orderItem);
@@ -152,6 +162,7 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    // 주문 TotalPrice 업데이트
     private void updateOrderTotalPrice(Order order, int totalPrice) {
         try {
             order.setTotalPrice(totalPrice);
@@ -165,6 +176,7 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    // 주문 취소
     @Override
     @Transactional
     public ResponseEntity<ResponseDto<Void>> cancelOrder(int userId, int orderId) {
@@ -217,6 +229,7 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    // 반품 신청
     @Override
     @Transactional
     public ResponseEntity<ResponseDto<Void>> requestReturn(int userId, int orderId) {
@@ -273,6 +286,7 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    // 매일 자정에 스케줄링 , 주문 상태 업데이트
     @Scheduled(cron = "0 0 0 * * *") // 매일 자정에 실행
     @Override
     @Transactional
@@ -326,6 +340,7 @@ public class OrderServiceImpl implements OrderService {
         return now.after(compareDate);
     }
 
+    // 주문 상태 업데이트
     @Override
     public ResponseEntity<?> updateOrderStatus(OrderStatusUpdateRequest request) {
         try {
@@ -373,4 +388,227 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    // 위시리스트 조회
+    @Override
+    public ResponseEntity<ResponseDto<List<WishListDto>>> getWishList(int userId) {
+        try {
+            List<WishList> wishListItems = wishListRepository.findByUserIdAndIsDeletedFalse(userId);
+            List<WishListDto> wishListDtos = wishListItems.stream()
+                .map(item -> {
+                    WishListDto dto = new WishListDto();
+                    dto.setProductId(item.getProductId());
+                    dto.setQuantity(item.getQuantity());
+                    
+                    ResponseDto<ProductResponse> productResponse = productService.getProduct(item.getProductId()).getBody();
+                    if (productResponse != null && productResponse.getData() != null) {
+                        ProductResponse product = productResponse.getData();
+                        dto.setProductName(product.getName());
+                        dto.setPrice(product.getPrice());
+                        dto.setDescription(product.getDescription());
+                    }
+                    
+                    return dto;
+                })
+                .toList();
+
+            return ResponseEntity.ok(
+                ResponseDto.<List<WishListDto>>builder()
+                    .statusCode(HttpStatus.OK.value())
+                    .resultMessage("위시리스트 조회 성공")
+                    .data(wishListDtos)
+                    .build()
+            );
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<List<WishListDto>>builder()
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .resultMessage("위시리스트 조회 실패")
+                    .build()
+                );
+        }
+    }
+
+    // 위시 리스트에 상품 추가
+    @Override
+    public ResponseEntity<ResponseDto<Void>> addToWishList(int userId, Long productId, int quantity) {
+        try {
+            if (wishListRepository.existsByUserIdAndProductIdAndIsDeletedFalse(userId, productId)) {
+                throw new BusinessRuntimeException("이미 위시리스트에 존재하는 상품입니다.");
+            }
+
+            WishList wishList = new WishList();
+            wishList.setUserId(userId);
+            wishList.setProductId(productId);
+            wishList.setQuantity(quantity);
+            wishList.setDeleted(false);
+            
+            wishListRepository.save(wishList);
+
+            return ResponseEntity.ok(
+                ResponseDto.<Void>builder()
+                    .statusCode(HttpStatus.OK.value())
+                    .resultMessage("위시리스트에 상품이 추가되었습니다.")
+                    .build()
+            );
+        } catch (BusinessRuntimeException e) {
+            return ResponseEntity.badRequest()
+                .body(ResponseDto.<Void>builder()
+                    .statusCode(HttpStatus.BAD_REQUEST.value())
+                    .resultMessage(e.getMessage())
+                    .build()
+                );
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<Void>builder()
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .resultMessage("위시리스트 추가 실패")
+                    .build()
+                );
+        }
+    }
+
+    // 위시리스트 상품 수량 변경
+    @Override
+    public ResponseEntity<ResponseDto<Void>> updateWishListItem(int userId, Long productId, int quantity) {
+        try {
+            WishList wishList = wishListRepository.findByUserIdAndProductIdAndIsDeletedFalse(userId, productId)
+                .orElseThrow(() -> new BusinessRuntimeException("위시리스트에 존재하지 않는 상품입니다."));
+
+            wishList.setQuantity(quantity);
+            wishListRepository.save(wishList);
+
+            return ResponseEntity.ok(
+                ResponseDto.<Void>builder()
+                    .statusCode(HttpStatus.OK.value())
+                    .resultMessage("위시리스트 상품 수량이 수정되었습니다.")
+                    .build()
+            );
+        } catch (BusinessRuntimeException e) {
+            return ResponseEntity.badRequest()
+                .body(ResponseDto.<Void>builder()
+                    .statusCode(HttpStatus.BAD_REQUEST.value())
+                    .resultMessage(e.getMessage())
+                    .build()
+                );
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<Void>builder()
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .resultMessage("위시리스트 수정 실패")
+                    .build()
+                );
+        }
+    }
+
+    // 위시리스트에서 상품 제거
+    @Override
+    public ResponseEntity<ResponseDto<Void>> removeFromWishList(int userId, Long productId) {
+        try {
+            WishList wishList = wishListRepository.findByUserIdAndProductIdAndIsDeletedFalse(userId, productId)
+                .orElseThrow(() -> new BusinessRuntimeException("위시리스트에 존재하지 않는 상품입니다."));
+
+            wishList.setDeleted(true);
+            wishListRepository.save(wishList);
+
+            return ResponseEntity.ok(
+                ResponseDto.<Void>builder()
+                    .statusCode(HttpStatus.OK.value())
+                    .resultMessage("위시리스트에서 상품이 제거되었습니다.")
+                    .build()
+            );
+        } catch (BusinessRuntimeException e) {
+            return ResponseEntity.badRequest()
+                .body(ResponseDto.<Void>builder()
+                    .statusCode(HttpStatus.BAD_REQUEST.value())
+                    .resultMessage(e.getMessage())
+                    .build()
+                );
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<Void>builder()
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .resultMessage("위시리스트 제거 실패")
+                    .build()
+                );
+        }
+    }
+
+    // 위시리스트에 있는 상품을 주문
+    @Override
+    public ResponseEntity<ResponseDto<WishListOrderResponseDto>> orderFromWishList(int userId, List<Long> productIds) {
+        try {
+            List<WishList> wishListItems = wishListRepository.findByUserIdAndIsDeletedFalse(userId)
+                .stream()
+                .filter(item -> productIds.contains(item.getProductId()))
+                .toList();
+
+            if (wishListItems.isEmpty()) {
+                throw new BusinessRuntimeException("주문할 상품이 위시리스트에 없습니다.");
+            }
+
+            // 주문 생성을 위한 요청 아이템 리스트 생성
+            List<CreateOrderReqDto> orderItemRequests = wishListItems.stream()
+                .map(item -> CreateOrderReqDto.builder()
+                    .productId(item.getProductId())
+                    .quantity((long) item.getQuantity())
+                    .build())
+                .toList();
+
+            // 주문 생성 및 결과 저장
+            CreateOrderResDto orderResult = createOrder(userId, orderItemRequests);
+            
+            // Order 엔티티 조회
+            Order createdOrder = orderRepository.findById(orderResult.getOrderId())
+                .orElseThrow(() -> new BusinessRuntimeException("생성된 주문을 찾을 수 없습니다."));
+
+            // 위시리스트 아이템 삭제 처리
+            wishListItems.forEach(item -> item.setDeleted(true));
+            wishListRepository.saveAll(wishListItems);
+
+            // 주문 아이템 조회
+            List<OrderItem> orderedItems = orderItemRepository.findByOrderId(createdOrder.getId());
+            
+            // 응답 데이터 생성
+            WishListOrderResponseDto responseData = WishListOrderResponseDto.builder()
+                .orderId(createdOrder.getId())
+                .userId(userId)
+                .orderDate(createdOrder.getOrderDate())
+                .totalPrice(createdOrder.getTotalPrice())
+                .items(orderedItems.stream()
+                    .<OrderItemDto>map(item -> {
+                        ProductResponse productResponse = productService.getProduct(Long.valueOf(item.getProductId())).getBody().getData();
+                        return OrderItemDto.builder()
+                            .productId(Long.valueOf(item.getProductId()))
+                            .productName(productResponse.getName())
+                            .quantity(item.getQuantity())
+                            .price(productResponse.getPrice())
+                            .build();
+                    })
+                    .toList())
+                .build();
+
+            return ResponseEntity.ok(
+                ResponseDto.<WishListOrderResponseDto>builder()
+                    .statusCode(HttpStatus.OK.value())
+                    .resultMessage("위시리스트 상품 주문이 완료되었습니다.")
+                    .data(responseData)
+                    .build()
+            );
+
+        } catch (BusinessRuntimeException e) {
+            return ResponseEntity.badRequest()
+                .body(ResponseDto.<WishListOrderResponseDto>builder()
+                    .statusCode(HttpStatus.BAD_REQUEST.value())
+                    .resultMessage(e.getMessage())
+                    .build()
+                );
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<WishListOrderResponseDto>builder()
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .resultMessage("위시리스트 주문 실패")
+                    .build()
+                );
+        }
+    }
 }
