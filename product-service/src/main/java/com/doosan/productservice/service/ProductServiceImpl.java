@@ -16,6 +16,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
@@ -177,6 +181,34 @@ public class ProductServiceImpl implements ProductService {
                 .body(ResponseDto.<ProductResponse>builder()
                     .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
                     .resultMessage(e.getMessage())
+                    .build()
+                );
+        }
+    }
+
+    @Override
+    public ResponseEntity<ResponseDto<Map<Long, Long>>> getBulkProductPrices(List<Long> productIds) {
+        try {
+            Map<Long, Long> priceMap = productRepository.findAllById(productIds)
+                .stream()
+                .collect(Collectors.toMap(
+                    Product::getId,
+                    Product::getPrice
+                ));
+
+            return ResponseEntity.ok(
+                ResponseDto.<Map<Long, Long>>builder()
+                    .statusCode(HttpStatus.OK.value())
+                    .resultMessage(ApiResponse.COMPLETE)
+                    .data(priceMap)
+                    .build()
+            );
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<Map<Long, Long>>builder()
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .resultMessage(ApiResponse.ERROR)
+                    .detailMessage(e.getMessage())
                     .build()
                 );
         }
