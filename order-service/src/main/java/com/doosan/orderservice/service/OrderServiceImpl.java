@@ -13,10 +13,12 @@ import com.doosan.orderservice.repository.OrderRepository;
 import com.doosan.orderservice.repository.WishListRepository;
 import com.doosan.productservice.dto.ProductResponse;
 import com.doosan.productservice.service.ProductService;
+import com.doosan.orderservice.service.StockService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.dao.DataAccessException;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -24,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
+
 
 import java.util.Date;
 import java.util.List;
@@ -41,6 +44,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final WishListRepository wishListRepository;
+    private final StockService stockService;
 
     // 주문 하기
     @Override
@@ -129,15 +133,27 @@ public class OrderServiceImpl implements OrderService {
 
 
     // 주문한 상품의 재고 업데이트
-    private void updateProductStock(CreateOrderReqDto quantity) {
+    private void updateProductStock(CreateOrderReqDto orderRequest) {
         try {
-            productService.updateStock(quantity);
+            // Redis의 재고 확인 및 차감
+            boolean stockAcquired = stockService.tryAcquireStock(
+                orderRequest.getProductId(), 
+                orderRequest.getQuantity().intValue()
+            );
+            
+            if (!stockAcquired) {
+                throw new BusinessRuntimeException("재고가 부족합니다.");
+            }
+
+            // 실제 DB 재고 업데이트
+            productService.updateStock(orderRequest);
         } catch (BusinessRuntimeException e) {
-            log.error("재고 업데이트 중 오류 발생", e);
+            // 실패시 Redis 재고 복구
+            stockService.restoreStock(
+                orderRequest.getProductId(), 
+                orderRequest.getQuantity().intValue()
+            );
             throw e;
-        } catch (Exception e) {
-            log.error("재고 업데이트 중 예기치 않은 오류 발생", e);
-            throw new BusinessRuntimeException("재고 업데이트 중 예기치 않은 오류가 발생했습니다.", e);
         }
     }
 
@@ -649,3 +665,4 @@ public class OrderServiceImpl implements OrderService {
         return response.getBody().getData();
     }
 }
+
