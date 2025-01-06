@@ -6,6 +6,7 @@ import com.doosan.productservice.dto.ProductResponse;
 import com.doosan.productservice.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -42,5 +43,53 @@ public class ProductController {
     @GetMapping("/{id}")
     public ResponseEntity<ResponseDto<ProductResponse>> getProduct(@PathVariable Long id) {
         return productService.getProduct(id);
+    }
+
+    // circuitBreaker 테스트 용 에러 발생 api
+    @GetMapping("/test/error")
+    public ResponseEntity<ResponseDto<ProductResponse>> testError() {
+        throw new RuntimeException("강제로 발생시킨 에러");
+    }
+
+    // circuitBreaker 테스트 용 지연 발생 api
+    @GetMapping("/test/delay")
+    public ResponseEntity<ResponseDto<ProductResponse>> testDelay() throws InterruptedException {
+        Thread.sleep(3000); // 3초 지연
+        return ResponseEntity.ok(
+                ResponseDto.<ProductResponse>builder()
+                        .statusCode(HttpStatus.OK.value())
+                        .resultMessage("지연 응답")
+                        .build()
+        );
+    }
+
+    @GetMapping("/test/random-error")
+    public ResponseEntity<ResponseDto<ProductResponse>> testRandomError() {
+        double random = Math.random();
+        if (random < 0.7) { // 70% 확률로 에러 발생
+            throw new RuntimeException("랜덤 에러 발생");
+        }
+        return ResponseEntity.ok(
+            ResponseDto.<ProductResponse>builder()
+                .statusCode(HttpStatus.OK.value())
+                .resultMessage("성공")
+                .build()
+        );
+    }
+
+    @GetMapping("/test/timeout")
+    public ResponseEntity<ResponseDto<ProductResponse>> testTimeout() {
+        double random = Math.random();
+        try {
+            Thread.sleep((long) (random * 5000)); // 0~5초 랜덤 지연
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return ResponseEntity.ok(
+            ResponseDto.<ProductResponse>builder()
+                .statusCode(HttpStatus.OK.value())
+                .resultMessage("타임아웃 테스트 응답")
+                .build()
+        );
     }
 }

@@ -22,6 +22,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 
 import java.util.Date;
 import java.util.List;
@@ -576,7 +578,7 @@ public class OrderServiceImpl implements OrderService {
                 .totalPrice(createdOrder.getTotalPrice())
                 .items(orderedItems.stream()
                     .<OrderItemDto>map(item -> {
-                        ProductResponse productResponse = productService.getProduct(Long.valueOf(item.getProductId())).getBody().getData();
+                        ProductResponse productResponse = getProductWithCircuitBreaker(Long.valueOf(item.getProductId())); // 서킷브레이커 추가
                         return OrderItemDto.builder()
                             .productId(Long.valueOf(item.getProductId()))
                             .productName(productResponse.getName())
@@ -610,5 +612,40 @@ public class OrderServiceImpl implements OrderService {
                     .build()
                 );
         }
+    }
+
+    @Retry(name = "productService", fallbackMethod = "getProductFallback")
+    @CircuitBreaker(name = "productService", fallbackMethod = "getProductFallback")
+    public ProductResponse getProductWithCircuitBreaker(Long productId) {
+        ResponseEntity<ResponseDto<ProductResponse>> response = productService.getProduct(productId);
+        if (response.getBody() == null || response.getBody().getData() == null) {
+            throw new BusinessRuntimeException("상품 정보를 조회할 수 없습니다.");
+        }
+        return response.getBody().getData();
+    }
+
+    private ProductResponse getProductFallback(Long productId, Exception e) {
+        log.error("상품 정보 조회 실패. ProductId: {}, Error: {}", productId, e.getMessage());
+        throw new BusinessRuntimeException("일시적인 서비스 장애로 상품 정보를 조회할 수 없습니다.");
+    }
+
+    @Retry(name = "productService", fallbackMethod = "getProductFallback")
+    @CircuitBreaker(name = "productService", fallbackMethod = "getProductFallback")
+    public ProductResponse testRandomError() {
+        ResponseEntity<ResponseDto<ProductResponse>> response = productService.testRandomError();
+        if (response.getBody() == null || response.getBody().getData() == null) {
+            throw new BusinessRuntimeException("상품 정보를 조회할 수 없습니다.");
+        }
+        return response.getBody().getData();
+    }
+
+    @Retry(name = "productService", fallbackMethod = "getProductFallback")
+    @CircuitBreaker(name = "productService", fallbackMethod = "getProductFallback")
+    public ProductResponse testTimeout() {
+        ResponseEntity<ResponseDto<ProductResponse>> response = productService.testTimeout();
+        if (response.getBody() == null || response.getBody().getData() == null) {
+            throw new BusinessRuntimeException("상품 정보를 조회할 수 없습니다.");
+        }
+        return response.getBody().getData();
     }
 }

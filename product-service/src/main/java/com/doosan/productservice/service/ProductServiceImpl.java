@@ -112,27 +112,76 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ResponseEntity<ResponseDto<ProductResponse>> getProduct(Long id) {
         try {
+            // 테스트용 ID 999에 대해 강제로 예외 발생
+            if (id == 999L) {
+                throw new RuntimeException("테스트용 강제 에러 발생");
+            }
+            
             Product product = productRepository.findById(id)
                     .orElseThrow(() -> new RuntimeException("상품 조회 실패한 ID: " + id));
 
             return ResponseEntity.ok(
                     ResponseDto.<ProductResponse>builder()
                             .statusCode(HttpStatus.OK.value())
-                            .resultMessage(ApiResponse.SEARCH_COMPLETE) // 직접 상수 사용
+                            .resultMessage(ApiResponse.SEARCH_COMPLETE)
                             .data(productMapper.toDto(product))
                             .build()
             );
-
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseDto.<ProductResponse>builder()
                             .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                            .resultMessage(ApiResponse.SEARCH_ERROR) // 직접 상수 사용
+                            .resultMessage(ApiResponse.SEARCH_ERROR)
                             .detailMessage(e.getMessage())
                             .build()
                     );
         }
     }
+
+    @Override
+    public ResponseEntity<ResponseDto<ProductResponse>> testRandomError() {
+        try {
+            double random = Math.random();
+            if (random < 0.7) { // 70% 확률로 에러 발생
+                throw new RuntimeException("랜덤 에러 발생");
+            }
+            return ResponseEntity.ok(
+                ResponseDto.<ProductResponse>builder()
+                    .statusCode(HttpStatus.OK.value())
+                    .resultMessage("성공")
+                    .build()
+            );
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<ProductResponse>builder()
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .resultMessage(e.getMessage())
+                    .build()
+                );
+        }
+    }
+
+    @Override
+    public ResponseEntity<ResponseDto<ProductResponse>> testTimeout() {
+        try {
+            double random = Math.random();
+            Thread.sleep((long) (random * 5000)); // 0~5초 랜덤 지연
+            return ResponseEntity.ok(
+                ResponseDto.<ProductResponse>builder()
+                    .statusCode(HttpStatus.OK.value())
+                    .resultMessage("타임아웃 테스트 응답")
+                    .build()
+            );
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<ProductResponse>builder()
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .resultMessage(e.getMessage())
+                    .build()
+                );
+        }
+    }
+
     private Sort createSort(String sort) {
         switch (sort.toLowerCase()) {
             case "price":

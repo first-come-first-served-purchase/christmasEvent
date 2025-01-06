@@ -19,4 +19,7 @@ public interface ProductService {
     ResponseEntity<ResponseDto<Long>> getProductPrice(Long id);
 
     void updateStock(CreateOrderReqDto quantity);
+
+    ResponseEntity<ResponseDto<ProductResponse>> testRandomError();
+    ResponseEntity<ResponseDto<ProductResponse>> testTimeout();
 }

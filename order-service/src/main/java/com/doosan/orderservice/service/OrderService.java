@@ -6,6 +6,7 @@ import com.doosan.orderservice.dto.CreateOrderResDto;
 import com.doosan.orderservice.dto.OrderStatusUpdateRequest;
 import com.doosan.orderservice.dto.WishListDto;
 import com.doosan.orderservice.dto.WishListOrderResponseDto;
+import com.doosan.productservice.dto.ProductResponse;
 import org.springframework.http.ResponseEntity;
 
 import java.util.List;
@@ -21,4 +22,8 @@ public interface OrderService {
     ResponseEntity<ResponseDto<Void>> updateWishListItem(int userId, Long productId, int quantity);
     ResponseEntity<ResponseDto<Void>> removeFromWishList(int userId, Long productId);
     ResponseEntity<ResponseDto<WishListOrderResponseDto>> orderFromWishList(int userId, List<Long> productIds);
+
+    ProductResponse getProductWithCircuitBreaker(Long productId);
+    ProductResponse testRandomError();
+    ProductResponse testTimeout();
 }
