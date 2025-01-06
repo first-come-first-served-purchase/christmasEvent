@@ -13,27 +13,23 @@ import com.doosan.orderservice.repository.OrderRepository;
 import com.doosan.orderservice.repository.WishListRepository;
 import com.doosan.productservice.dto.ProductResponse;
 import com.doosan.productservice.service.ProductService;
-import com.doosan.orderservice.service.StockService;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.dao.DataAccessException;
-
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.retry.annotation.Retry;
-
 
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.Map;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +41,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderItemRepository orderItemRepository;
     private final WishListRepository wishListRepository;
     private final StockService stockService;
+    private final ExecutorService executorService;
 
     // 주문 하기
     @Override
@@ -93,9 +90,11 @@ public class OrderServiceImpl implements OrderService {
     // 주문 아이템의 총 금액을 계산
     private int calculateTotalPrice(Order order, List<CreateOrderReqDto> orderItems) {
         List<CompletableFuture<Integer>> futureList = orderItems.stream()
-                .map(item -> CompletableFuture.supplyAsync(() -> processOrderItem(order.getId(), item)))
-                .toList();
-
+            .map(item -> CompletableFuture.supplyAsync(
+                () -> processOrderItem(order.getId(), item), 
+                executorService
+            ))
+            .toList();
         try {
             return futureList.stream()
                     .mapToInt(future -> {
@@ -110,6 +109,21 @@ public class OrderServiceImpl implements OrderService {
         } catch (BusinessRuntimeException e) {
             throw e;
         }
+    }
+
+    // 가격 일괄 조회를 위한 메서드 추가
+    private Map<Long, Long> getBulkProductPrices(List<CreateOrderReqDto> orderItems) {
+        List<Long> productIds = orderItems.stream()
+            .map(CreateOrderReqDto::getProductId)
+            .collect(Collectors.toList());
+            
+        ResponseEntity<ResponseDto<Map<Long, Long>>> response = productService.getBulkProductPrices(productIds);
+        
+        if (response.getBody() == null || response.getBody().getData() == null) {
+            throw new BusinessRuntimeException("상품 가격 조회에 실패했습니다.");
+        }
+        
+        return response.getBody().getData();
     }
 
     // 주문 아이템 처리
