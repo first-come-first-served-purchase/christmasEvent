@@ -45,3 +45,8 @@ subprojects {
         useJUnitPlatform()
     }
 }
+// common 모듈의 build.gradle에서 Resilience4j 의존성 버전 명시
+ext {
+    set('springCloudVersion', "2023.0.2")
+    set('resilience4jVersion', "2.1.0")
+}

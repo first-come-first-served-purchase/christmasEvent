@@ -3,6 +3,7 @@ package com.doosan.orderservice.controller;
 import com.doosan.common.dto.ResponseDto;
 import com.doosan.common.dto.ResponseMessage;
 import com.doosan.common.dto.order.CreateOrderReqDto;
+import com.doosan.common.exception.BusinessRuntimeException;
 import com.doosan.common.utils.JwtUtil;
 import com.doosan.common.utils.ParseRequestUtil;
 import com.doosan.orderservice.dto.CreateOrderResDto;
@@ -10,15 +11,17 @@ import com.doosan.orderservice.dto.OrderStatusUpdateRequest;
 import com.doosan.orderservice.dto.WishListDto;
 import com.doosan.orderservice.dto.WishListOrderResponseDto;
 import com.doosan.orderservice.service.OrderService;
+import com.doosan.productservice.dto.ProductResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/order")
+@RequestMapping("/api/v1/orders")
 public class OrderController {
 
     private final OrderService orderService;
@@ -113,6 +116,70 @@ public class OrderController {
             @RequestBody List<Long> productIds) {
         int userId = parseRequestUtil.extractUserIdFromRequest(request);
         return orderService.orderFromWishList(userId, productIds);
+    }
+
+    // Circuit Breaker 테스트용 API
+    @GetMapping("/test/circuit-breaker/{productId}")
+    public ResponseEntity<ResponseDto<ProductResponse>> testCircuitBreaker(@PathVariable Long productId) {
+        try {
+            ProductResponse response = orderService.getProductWithCircuitBreaker(productId);
+            return ResponseEntity.ok(
+                ResponseDto.<ProductResponse>builder()
+                    .statusCode(HttpStatus.OK.value())
+                    .resultMessage("성공")
+                    .data(response)
+                    .build()
+            );
+        } catch (BusinessRuntimeException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<ProductResponse>builder()
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .resultMessage(e.getMessage())
+                    .build()
+                );
+        }
+    }
+
+    @GetMapping("/test/random-error")
+    public ResponseEntity<ResponseDto<ProductResponse>> testRandomError() {
+        try {
+            ProductResponse response = orderService.testRandomError();
+            return ResponseEntity.ok(
+                ResponseDto.<ProductResponse>builder()
+                    .statusCode(HttpStatus.OK.value())
+                    .resultMessage("성공")
+                    .data(response)
+                    .build()
+            );
+        } catch (BusinessRuntimeException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<ProductResponse>builder()
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .resultMessage(e.getMessage())
+                    .build()
+                );
+        }
+    }
+
+    @GetMapping("/test/timeout")
+    public ResponseEntity<ResponseDto<ProductResponse>> testTimeout() {
+        try {
+            ProductResponse response = orderService.testTimeout();
+            return ResponseEntity.ok(
+                ResponseDto.<ProductResponse>builder()
+                    .statusCode(HttpStatus.OK.value())
+                    .resultMessage("성공")
+                    .data(response)
+                    .build()
+            );
+        } catch (BusinessRuntimeException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<ProductResponse>builder()
+                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                    .resultMessage(e.getMessage())
+                    .build()
+                );
+        }
     }
 
 }
