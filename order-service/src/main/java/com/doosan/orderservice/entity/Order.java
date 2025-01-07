@@ -39,4 +39,7 @@ public class Order extends CommonEntity {
 
     private Date returnCompleteDate;  // 반품 완료일
 
+    @Column(name = "cancel_complete_date")
+    private Date cancelCompleteDate;
+
 }
