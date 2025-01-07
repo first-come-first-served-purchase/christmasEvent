@@ -601,22 +601,29 @@ public class OrderServiceImpl implements OrderService {
             List<OrderItem> orderedItems = orderItemRepository.findByOrderId(createdOrder.getId());
             
             // 응답 데이터 생성
+            List<OrderItemDto> orderItemDtos = orderedItems.stream()
+                .<OrderItemDto>map(item -> {
+                    ProductResponse productResponse = getProductWithCircuitBreaker(Long.valueOf(item.getProductId()));
+                    return OrderItemDto.builder()
+                        .productId(Long.valueOf(item.getProductId()))
+                        .productName(productResponse.getName())
+                        .quantity(item.getQuantity())
+                        .price(productResponse.getPrice())
+                        .build();
+                })
+                .toList();
+
+            // 총 가격 계산
+            long totalPrice = orderItemDtos.stream()
+                .mapToLong(item -> item.getPrice() * item.getQuantity())
+                .sum();
+
             WishListOrderResponseDto responseData = WishListOrderResponseDto.builder()
                 .orderId(createdOrder.getId())
                 .userId(userId)
                 .orderDate(createdOrder.getOrderDate())
-                .totalPrice(createdOrder.getTotalPrice())
-                .items(orderedItems.stream()
-                    .<OrderItemDto>map(item -> {
-                        ProductResponse productResponse = getProductWithCircuitBreaker(Long.valueOf(item.getProductId())); // 서킷브레이커 추가
-                        return OrderItemDto.builder()
-                            .productId(Long.valueOf(item.getProductId()))
-                            .productName(productResponse.getName())
-                            .quantity(item.getQuantity())
-                            .price(productResponse.getPrice())
-                            .build();
-                    })
-                    .toList())
+                .totalPrice(totalPrice)  // 계산된 총 가격 사용
+                .items(orderItemDtos)
                 .build();
 
             return ResponseEntity.ok(
