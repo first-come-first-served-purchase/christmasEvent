@@ -18,10 +18,15 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.transaction.annotation.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 @RequiredArgsConstructor
 public class ProductService {
+
+    private static final Logger log = LoggerFactory.getLogger(ProductService.class);
 
     private final ProductRepository productRepository; // 상품 레포지토리
     private final ProductMapper productMapper; // 상품 매퍼
@@ -52,19 +57,24 @@ public class ProductService {
     }
 
     // 상품 재고 업데이트 ( 주문 시 )
+    @Transactional
     public void updateStock(CreateOrderReqDto orderRequest) {
         Product product = productRepository.findById(orderRequest.getProductId())
                 .orElseThrow(() -> new RuntimeException("상품을 찾을 수 없습니다. ID: " + orderRequest.getProductId()));
 
-        // 재고 계산 및 검증
-        Long newStock = product.getQuantity() - orderRequest.getQuantity();
+        // 재고 계산 (음수면 차감, 양수면 증가)
+        Long currentStock = product.getQuantity();
+        Long changeAmount = orderRequest.getQuantity();
+        Long newStock = currentStock + changeAmount;
+
         if (newStock < 0) {
-            throw new RuntimeException("재고가 부족합니다.");
+            throw new RuntimeException("재고가 부족합니다. 현재 재고: " + currentStock);
         }
 
-        // 재고 업데이트
         product.setQuantity(newStock);
         productRepository.save(product);
+        log.info("상품 재고 업데이트 완료. 상품 ID: {}, 현재 재고: {}, 변경 수량: {}, 최종 재고: {}", 
+            orderRequest.getProductId(), currentStock, changeAmount, newStock);
     }
 
     // 상품 목록 조회 ( 페이징, 카테고리, 검색어, 정렬 지원 )

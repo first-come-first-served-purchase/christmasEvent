@@ -37,7 +37,7 @@ public class StockService {
                 ResponseEntity<ResponseDto<ProductResponse>> response =
                     productService.getProduct(productId);
                 if (response.getBody() != null && response.getBody().getData() != null) {
-                    Integer stock = response.getBody().getData().getQuantity();
+                    Long stock = Long.valueOf(response.getBody().getData().getQuantity());
                     redisTemplate.opsForValue().set(
                         STOCK_KEY_PREFIX + productId, 
                         stock
@@ -56,19 +56,30 @@ public class StockService {
     }
 
     // 재고 복구 (주문 취소/실패 시)
-    public void restoreStock(Long productId, int quantity) {
+    public void restoreStock(Long productId, Long quantity) {
         String lockKey = "lock:" + STOCK_KEY_PREFIX + productId;
         RLock lock = redissonClient.getLock(lockKey);
 
         try {
             if (lock.tryLock(5, 3, TimeUnit.SECONDS)) {
-                Integer currentStock = (Integer) redisTemplate.opsForValue()
-                    .get(STOCK_KEY_PREFIX + productId);
+                Object stockObj = redisTemplate.opsForValue().get(STOCK_KEY_PREFIX + productId);
+                Long currentStock = null;
+                
+                if (stockObj instanceof Integer) {
+                    currentStock = Long.valueOf((Integer) stockObj);
+                } else if (stockObj instanceof Long) {
+                    currentStock = (Long) stockObj;
+                }
                 
                 if (currentStock != null) {
-                    redisTemplate.opsForValue()
-                        .set(STOCK_KEY_PREFIX + productId, currentStock + quantity);
-                    log.info("재고 복구 완료. 상품 ID: {}, 복구 수량: {}", productId, quantity);
+                    Long newStock = currentStock + quantity;
+                    redisTemplate.opsForValue().set(STOCK_KEY_PREFIX + productId, newStock);
+                    updateStockMonitoring(productId, newStock, "INCREASE");
+                    
+                    log.info("재고 복구 완료. 상품 ID: {}, 현재 재고: {}, 복구 수량: {}, 최종 재고: {}", 
+                        productId, currentStock, quantity, newStock);
+                } else {
+                    initializeStock(productId);
                 }
             }
         } catch (InterruptedException e) {
@@ -82,7 +93,7 @@ public class StockService {
     }
 
     // 재고 모니터링 정보 업데이트
-    private void updateStockMonitoring(Long productId, int currentStock, String operation) {
+    private void updateStockMonitoring(Long productId, Long currentStock, String operation) {
         String monitorKey = STOCK_MONITOR_KEY_PREFIX + productId;
         String monitorInfo = String.format(
             "{\"timestamp\":\"%s\",\"stock\":%d,\"operation\":\"%s\"}", 
@@ -110,7 +121,7 @@ public class StockService {
                 .collect(Collectors.toList());
     }
 
-    public boolean tryAcquireStock(Long productId, int quantity) {
+    public boolean tryAcquireStock(Long productId, Long quantity) {
         String lockKey = "lock:" + STOCK_KEY_PREFIX + productId;
         RLock lock = redissonClient.getLock(lockKey);
 
@@ -121,14 +132,23 @@ public class StockService {
                 return false;
             }
 
-            Integer currentStock = (Integer) redisTemplate.opsForValue()
-                    .get(STOCK_KEY_PREFIX + productId);
+            Object stockObj = redisTemplate.opsForValue().get(STOCK_KEY_PREFIX + productId);
+            Long currentStock = null;
+            
+            if (stockObj instanceof Integer) {
+                currentStock = Long.valueOf((Integer) stockObj);
+            } else if (stockObj instanceof Long) {
+                currentStock = (Long) stockObj;
+            }
 
             if (currentStock == null) {
-                // Redis에 재고 정보가 없으면 초기화
                 initializeStock(productId);
-                currentStock = (Integer) redisTemplate.opsForValue()
-                        .get(STOCK_KEY_PREFIX + productId);
+                stockObj = redisTemplate.opsForValue().get(STOCK_KEY_PREFIX + productId);
+                if (stockObj instanceof Integer) {
+                    currentStock = Long.valueOf((Integer) stockObj);
+                } else if (stockObj instanceof Long) {
+                    currentStock = (Long) stockObj;
+                }
             }
 
             if (currentStock == null || currentStock < quantity) {
@@ -137,10 +157,7 @@ public class StockService {
                 return false;
             }
 
-            redisTemplate.opsForValue()
-                    .set(STOCK_KEY_PREFIX + productId, currentStock - quantity);
-            
-            // 모니터링 정보 업데이트
+            redisTemplate.opsForValue().set(STOCK_KEY_PREFIX + productId, currentStock - quantity);
             updateStockMonitoring(productId, currentStock - quantity, "DECREASE");
             
             log.info("재고 차감 성공. 상품 ID: {}, 차감 수량: {}, 남은 재고: {}", 

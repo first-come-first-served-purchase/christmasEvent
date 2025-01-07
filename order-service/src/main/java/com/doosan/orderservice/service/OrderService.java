@@ -87,17 +87,16 @@ public class OrderService {
             // 재고 복구
             List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
             for (OrderItem item : orderItems) {
+                // ProductService 재고 복구
                 productService.updateStock(CreateOrderReqDto.builder()
                         .productId((long) item.getProductId())
-                        .quantity((long) -item.getQuantity())
+                        .quantity((long) item.getQuantity())
                         .build());
+                
+                // Redis 재고 복구
+                stockService.restoreStock((long) item.getProductId(), (long) item.getQuantity());
             }
-            log.info("재고 복구 완료");
-
-            // 변경된 주문 정보 다시 조회하여 확인
-            Order updatedOrder = orderRepository.findById(orderId).orElseThrow();
-            log.info("최종 주문 상태 - status: {}, cancelCompleteDate: {}", 
-                    updatedOrder.getStatus(), updatedOrder.getCancelCompleteDate());
+            log.info("재고 복구 완료 (DB 및 Redis)");
 
             return ResponseEntity.ok(
                     ResponseDto.<Void>builder()
@@ -111,14 +110,6 @@ public class OrderService {
                     .body(ResponseDto.<Void>builder()
                             .statusCode(HttpStatus.BAD_REQUEST.value())
                             .resultMessage(e.getMessage())
-                            .build()
-                    );
-        } catch (Exception e) {
-            log.error("주문 취소 실패 - Exception: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ResponseDto.<Void>builder()
-                            .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                            .resultMessage("주문 취소 처리 중 오류가 발생했습니다.")
                             .build()
                     );
         }
@@ -235,8 +226,27 @@ public class OrderService {
     }
 
     private int processOrderItem(int orderId, CreateOrderReqDto item) {
-        OrderItem orderItem = createAndSaveOrderItem(orderId, item);
-        return calculateItemPrice(item.getProductId(), item.getQuantity());
+        try {
+            // Redis 재고 확인 및 차감
+            boolean stockAcquired = stockService.tryAcquireStock(item.getProductId(), item.getQuantity());
+            if (!stockAcquired) {
+                throw new BusinessRuntimeException("재고가 부족합니다.");
+            }
+
+            // DB 재고 차감
+            productService.updateStock(CreateOrderReqDto.builder()
+                    .productId(item.getProductId())
+                    .quantity(-item.getQuantity())
+                    .build());
+
+            // 주문 아이템 생성
+            OrderItem orderItem = createAndSaveOrderItem(orderId, item);
+            return calculateItemPrice(item.getProductId(), item.getQuantity());
+        } catch (Exception e) {
+            // 실패시 Redis 재고 복구
+            stockService.restoreStock(item.getProductId(), item.getQuantity());
+            throw e;
+        }
     }
 
     private OrderItem createAndSaveOrderItem(int orderId, CreateOrderReqDto item) {
