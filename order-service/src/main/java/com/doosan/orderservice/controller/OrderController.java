@@ -11,6 +11,7 @@ import com.doosan.orderservice.dto.OrderStatusUpdateRequest;
 import com.doosan.orderservice.dto.WishListDto;
 import com.doosan.orderservice.dto.WishListOrderResponseDto;
 import com.doosan.orderservice.service.OrderService;
+import com.doosan.orderservice.service.WishListService;
 import com.doosan.productservice.dto.ProductResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,10 +27,12 @@ public class OrderController {
 
     private final OrderService orderService;
     private final ParseRequestUtil parseRequestUtil;
+    private final WishListService wishListService;
 
     @Autowired
-    public OrderController(OrderService orderService, JwtUtil jwtUtil) {
+    public OrderController(OrderService orderService, WishListService wishListService, JwtUtil jwtUtil) {
         this.orderService = orderService;
+        this.wishListService = wishListService;
         this.parseRequestUtil = new ParseRequestUtil(jwtUtil);
     }
 
@@ -77,7 +80,7 @@ public class OrderController {
     @GetMapping("/wishlist")
     public ResponseEntity<ResponseDto<List<WishListDto>>> getWishList(HttpServletRequest request) {
         int userId = parseRequestUtil.extractUserIdFromRequest(request);
-        return orderService.getWishList(userId);
+        return wishListService.getWishList(userId);
     }
 
     // WishList에 상품 추가
@@ -87,7 +90,7 @@ public class OrderController {
             @PathVariable Long productId,
             @RequestParam(defaultValue = "1") int quantity) {
         int userId = parseRequestUtil.extractUserIdFromRequest(request);
-        return orderService.addToWishList(userId, productId, quantity);
+        return wishListService.addToWishList(userId, productId, quantity);
     }
 
     // WishList 상품 수량 수정
@@ -97,7 +100,7 @@ public class OrderController {
             @PathVariable Long productId,
             @RequestParam int quantity) {
         int userId = parseRequestUtil.extractUserIdFromRequest(request);
-        return orderService.updateWishListItem(userId, productId, quantity);
+        return wishListService.updateWishListItem(userId, productId, quantity);
     }
 
     // WishList에서 상품 제거
@@ -106,7 +109,7 @@ public class OrderController {
             HttpServletRequest request,
             @PathVariable Long productId) {
         int userId = parseRequestUtil.extractUserIdFromRequest(request);
-        return orderService.removeFromWishList(userId, productId);
+        return wishListService.removeFromWishList(userId, productId);
     }
 
     // WishList 상품들 주문
@@ -115,7 +118,7 @@ public class OrderController {
             HttpServletRequest request,
             @RequestBody List<Long> productIds) {
         int userId = parseRequestUtil.extractUserIdFromRequest(request);
-        return orderService.orderFromWishList(userId, productIds);
+        return wishListService.orderFromWishList(userId, productIds);
     }
 
     // Circuit Breaker 테스트용 API
