@@ -8,6 +8,7 @@ import com.doosan.orderservice.dto.OrderStatusUpdateRequest;
 import com.doosan.orderservice.entity.Order;
 import com.doosan.orderservice.entity.OrderItem;
 import com.doosan.orderservice.entity.OrderStatus;
+import com.doosan.orderservice.entity.PaymentStatus;
 import com.doosan.orderservice.repository.OrderItemRepository;
 import com.doosan.orderservice.repository.OrderRepository;
 import com.doosan.orderservice.repository.WishListRepository;
@@ -227,9 +228,22 @@ public class OrderService {
 
     private int processOrderItem(int orderId, CreateOrderReqDto item) {
         try {
+            // 결제 진행 상태로 변경
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
+            order.setPaymentStatus(PaymentStatus.PAYMENT_PENDING);
+            // 결제 진행 상태 변경 및 시작 시간 기록
+            order.setPaymentStartedDate(new Date());
+            orderRepository.save(order);
+            log.info("결제 진행 중 상태로 변경. 주문 ID: {}", orderId);
+
             // Redis 재고 확인 및 차감
             boolean stockAcquired = stockService.tryAcquireStock(item.getProductId(), item.getQuantity());
             if (!stockAcquired) {
+                // 재고 부족 시 결제 실패 상태로 변경
+                order.setPaymentStatus(PaymentStatus.PAYMENT_FAILED);
+                orderRepository.save(order);
+                log.warn("재고 부족으로 결제 실패. 주문 ID: {}, 상품 ID: {}", orderId, item.getProductId());
                 throw new BusinessRuntimeException("재고가 부족합니다.");
             }
 
@@ -241,10 +255,23 @@ public class OrderService {
 
             // 주문 아이템 생성
             OrderItem orderItem = createAndSaveOrderItem(orderId, item);
+            
+            // 결제 완료 상태로 변경
+            order.setPaymentStatus(PaymentStatus.PAYMENT_COMPLETED);
+            // 결제 완료 시, 상태 및 완료 시간 업데이트
+            order.setPaymentCompletedDate(new Date());
+            orderRepository.save(order);
+            log.info("결제 완료 상태로 변경. 주문 ID: {}", orderId);
+
             return calculateItemPrice(item.getProductId(), item.getQuantity());
         } catch (Exception e) {
-            // 실패시 Redis 재고 복구
+            // 실패시 Redis 재고 복구 및 결제 실패 상태로 변경
             stockService.restoreStock(item.getProductId(), item.getQuantity());
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
+            order.setPaymentStatus(PaymentStatus.PAYMENT_FAILED);
+            orderRepository.save(order);
+            log.error("결제 처리 중 오류 발생. 주문 ID: {}, 오류: {}", orderId, e.getMessage());
             throw e;
         }
     }
@@ -274,8 +301,6 @@ public class OrderService {
         throw new BusinessRuntimeException("상품 정보를 가져올 수 없습니다.");
     }
 
-
-
     @CircuitBreaker(name = "productService", fallbackMethod = "testRandomErrorFallback")
     public ProductResponse testRandomError() {
         ResponseEntity<ResponseDto<ProductResponse>> response = productService.testRandomError();
@@ -284,7 +309,6 @@ public class OrderService {
         }
         throw new BusinessRuntimeException("랜덤 에러 테스트 실패");
     }
-
 
     @CircuitBreaker(name = "productService", fallbackMethod = "testTimeoutFallback")
     public ProductResponse testTimeout() {
@@ -295,4 +319,14 @@ public class OrderService {
         throw new BusinessRuntimeException("타임아웃 테스트 실패");
     }
 
+    // 결제 상태 조회 메서드 추가
+    public PaymentStatus getOrderPaymentStatus(int orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
+        log.info("주문 결제 상태 조회 - 주문 ID: {}, 결제 상태: {}", orderId, order.getPaymentStatus());
+        return order.getPaymentStatus();
+    }
+
 }
+
+
