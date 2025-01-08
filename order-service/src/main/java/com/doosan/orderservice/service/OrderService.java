@@ -37,6 +37,7 @@ public class OrderService {
     private final WishListRepository wishListRepository;
     private final StockService stockService;
     private final ExecutorService executorService;
+    private final OrderEventService orderEventService;
 
     @Transactional
     public CreateOrderResDto createOrder(int userId, List<CreateOrderReqDto> orderItems) {
@@ -98,6 +99,9 @@ public class OrderService {
                 stockService.restoreStock((long) item.getProductId(), (long) item.getQuantity());
             }
             log.info("재고 복구 완료 (DB 및 Redis)");
+
+            // 주문 취소 이벤트 발행
+            orderEventService.publishOrderCancelledEvent(order, orderItems);
 
             return ResponseEntity.ok(
                     ResponseDto.<Void>builder()
@@ -227,42 +231,27 @@ public class OrderService {
     }
 
     private int processOrderItem(int orderId, CreateOrderReqDto item) {
+        OrderItem orderItem = null;
         try {
-            // 결제 진행 상태로 변경
-            Order order = orderRepository.findById(orderId)
-                    .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
-            order.setPaymentStatus(PaymentStatus.PAYMENT_PENDING);
-            // 결제 진행 상태 변경 및 시작 시간 기록
-            order.setPaymentStartedDate(new Date());
-            orderRepository.save(order);
-            log.info("결제 진행 중 상태로 변경. 주문 ID: {}", orderId);
-
-            // Redis 재고 확인 및 차감
-            boolean stockAcquired = stockService.tryAcquireStock(item.getProductId(), item.getQuantity());
-            if (!stockAcquired) {
-                // 재고 부족 시 결제 실패 상태로 변경
-                order.setPaymentStatus(PaymentStatus.PAYMENT_FAILED);
-                orderRepository.save(order);
-                log.warn("재고 부족으로 결제 실패. 주문 ID: {}, 상품 ID: {}", orderId, item.getProductId());
-                throw new BusinessRuntimeException("재고가 부족합니다.");
-            }
-
-            // DB 재고 차감
+            // ProductService 재고 차감
             productService.updateStock(CreateOrderReqDto.builder()
                     .productId(item.getProductId())
                     .quantity(-item.getQuantity())
                     .build());
 
             // 주문 아이템 생성
-            OrderItem orderItem = createAndSaveOrderItem(orderId, item);
+            orderItem = createAndSaveOrderItem(orderId, item);
             
             // 결제 완료 상태로 변경
+            Order order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
             order.setPaymentStatus(PaymentStatus.PAYMENT_COMPLETED);
-            // 결제 완료 시, 상태 및 완료 시간 업데이트
             order.setPaymentCompletedDate(new Date());
             orderRepository.save(order);
-            log.info("결제 완료 상태로 변경. 주문 ID: {}", orderId);
-
+            
+            // 결제 완료 이벤트 발행
+            orderEventService.publishPaymentCompletedEvent(order, List.of(orderItem));
+            
             return calculateItemPrice(item.getProductId(), item.getQuantity());
         } catch (Exception e) {
             // 실패시 Redis 재고 복구 및 결제 실패 상태로 변경
@@ -271,16 +260,28 @@ public class OrderService {
                     .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
             order.setPaymentStatus(PaymentStatus.PAYMENT_FAILED);
             orderRepository.save(order);
-            log.error("결제 처리 중 오류 발생. 주문 ID: {}, 오류: {}", orderId, e.getMessage());
+            
+            // 결제 실패 이벤트 발행 (orderItem이 null이 아닌 경우에만)
+            if (orderItem != null) {
+                orderEventService.publishPaymentFailedEvent(order, List.of(orderItem));
+            }
             throw e;
         }
     }
 
     private OrderItem createAndSaveOrderItem(int orderId, CreateOrderReqDto item) {
+        // 상품 가격 조회
+        ResponseDto<ProductResponse> response = productService.getProduct(item.getProductId()).getBody();
+        int price = 0;
+        if (response != null && response.getData() != null) {
+            price = Math.toIntExact(response.getData().getPrice());
+        }
+
         OrderItem orderItem = new OrderItem();
         orderItem.setOrderId(orderId);
         orderItem.setProductId(item.getProductId().intValue());
         orderItem.setQuantity(item.getQuantity().intValue());
+        orderItem.setPrice(price);  // 가격 설정
         return orderItemRepository.save(orderItem);
     }
 

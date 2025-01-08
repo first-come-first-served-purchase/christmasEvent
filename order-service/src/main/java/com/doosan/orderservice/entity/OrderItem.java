@@ -17,11 +17,9 @@ public class OrderItem extends CommonEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private int id; // 주문 항목 ID
-
+    private int id;
     private int orderId; // 주문 ID
-
     private int productId; // 상품 ID
-
     private int quantity; // 주문 수량
+    private int price;  // 가격
 }
