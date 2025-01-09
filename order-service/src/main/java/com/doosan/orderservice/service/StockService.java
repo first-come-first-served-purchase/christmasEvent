@@ -1,6 +1,7 @@
 package com.doosan.orderservice.service;
 
 import com.doosan.common.dto.ResponseDto;
+import com.doosan.common.dto.order.CreateOrderReqDto;
 import com.doosan.productservice.dto.ProductResponse;
 import com.doosan.productservice.service.ProductService;
 import lombok.RequiredArgsConstructor;
@@ -57,38 +58,46 @@ public class StockService {
 
     // 재고 복구 (주문 취소/실패 시)
     public void restoreStock(Long productId, Long quantity) {
-        String lockKey = "lock:" + STOCK_KEY_PREFIX + productId;
-        RLock lock = redissonClient.getLock(lockKey);
-
+        RLock lock = redissonClient.getLock("stock:lock:" + productId);
         try {
             if (lock.tryLock(5, 3, TimeUnit.SECONDS)) {
-                Object stockObj = redisTemplate.opsForValue().get(STOCK_KEY_PREFIX + productId);
-                Long currentStock = null;
-                
-                if (stockObj instanceof Integer) {
-                    currentStock = Long.valueOf((Integer) stockObj);
-                } else if (stockObj instanceof Long) {
-                    currentStock = (Long) stockObj;
-                }
-                
-                if (currentStock != null) {
+                try {
+                    // Redis 재고 복구
+                    Object stockObj = redisTemplate.opsForValue().get(STOCK_KEY_PREFIX + productId);
+                    Long currentStock = null;
+                    
+                    if (stockObj == null) {
+                        initializeStock(productId);
+                        stockObj = redisTemplate.opsForValue().get(STOCK_KEY_PREFIX + productId);
+                    }
+                    
+                    if (stockObj instanceof Integer) {
+                        currentStock = Long.valueOf((Integer) stockObj);
+                    } else if (stockObj instanceof Long) {
+                        currentStock = (Long) stockObj;
+                    }
+
                     Long newStock = currentStock + quantity;
                     redisTemplate.opsForValue().set(STOCK_KEY_PREFIX + productId, newStock);
-                    updateStockMonitoring(productId, newStock, "INCREASE");
                     
+                    // DB 재고 복구
+                    productService.updateStock(CreateOrderReqDto.builder()
+                        .productId(productId)
+                        .quantity(quantity)  // 양수값으로 전달하여 재고 증가
+                        .build());
+                    
+                    updateStockMonitoring(productId, newStock, "RESTORE");
                     log.info("재고 복구 완료. 상품 ID: {}, 현재 재고: {}, 복구 수량: {}, 최종 재고: {}", 
                         productId, currentStock, quantity, newStock);
-                } else {
-                    initializeStock(productId);
+                    
+                } finally {
+                    lock.unlock();
                 }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("재고 복구 중 오류 발생", e);
-        } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
-            }
+            throw new RuntimeException("재고 복구 중 오류 발생", e);
         }
     }
 
@@ -172,6 +181,39 @@ public class StockService {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
             }
+        }
+    }
+
+    // 재고 차감 확정 메서드 추가
+    public void confirmStockReduction(Long productId, Long quantity) {
+        RLock lock = redissonClient.getLock("stock:lock:" + productId);
+        try {
+            if (lock.tryLock(5, 3, TimeUnit.SECONDS)) {
+                try {
+                    // Redis에서 현재 재고 확인
+                    String stockKey = STOCK_KEY_PREFIX + productId;
+                    Object stockObj = redisTemplate.opsForValue().get(stockKey);
+                    Long currentStock = null;
+                    
+                    if (stockObj instanceof Integer) {
+                        currentStock = Long.valueOf((Integer) stockObj);
+                    } else if (stockObj instanceof Long) {
+                        currentStock = (Long) stockObj;
+                    }
+
+                    if (currentStock != null) {
+                        // 재고 모니터링 정보 업데이트
+                        updateStockMonitoring(productId, currentStock, "CONFIRMED");
+                        log.info("재고 차감 확정 완료. 상품 ID: {}, 수량: {}, 현재 재고: {}", 
+                            productId, quantity, currentStock);
+                    }
+                } finally {
+                    lock.unlock();
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("재고 차감 확정 중 오류 발생. 상품 ID: {}", productId, e);
         }
     }
 }

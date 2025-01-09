@@ -25,11 +25,25 @@ dependencies {
     implementation project(':common')
     implementation project(':product-service')
 
-    // Redis 관련 의존성 추가
+    // 테스트
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.9.2'
+    testImplementation 'com.h2database:h2'
+    testImplementation 'org.testcontainers:testcontainers:1.18.3'
+    testImplementation 'org.testcontainers:kafka:1.18.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.18.3'
+    testImplementation 'org.awaitility:awaitility:4.2.0'
+
+    // Kafka
+    implementation 'org.springframework.kafka:spring-kafka:3.0.11'
+    // kafka-clients
+    implementation 'org.apache.kafka:kafka-clients:3.6.1'
+
+    // Redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.redisson:redisson-spring-boot-starter:3.17.0'
 
-    // Resilience4j 의존성 추가
+    // Resilience4j
     implementation "io.github.resilience4j:resilience4j-spring-boot2:${resilience4jVersion}"
     implementation "io.github.resilience4j:resilience4j-circuitbreaker:${resilience4jVersion}"
     implementation "io.github.resilience4j:resilience4j-retry:${resilience4jVersion}"
@@ -56,5 +70,13 @@ tasks.named('test') {
 tasks.withType(JavaCompile) {
     options.annotationProcessorPath = configurations.annotationProcessor.filter {
         !it.name.contains("product-service")
+    }
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events "passed", "skipped", "failed"
+        showStandardStreams = true
     }
 }
