@@ -232,6 +232,8 @@ public class OrderService {
 
     private int processOrderItem(int orderId, CreateOrderReqDto item) {
         OrderItem orderItem = null;
+        int itemTotalPrice = calculateItemPrice(item.getProductId(), item.getQuantity());
+
         try {
             // ProductService 재고 차감
             productService.updateStock(CreateOrderReqDto.builder()
@@ -239,20 +241,27 @@ public class OrderService {
                     .quantity(-item.getQuantity())
                     .build());
 
-            // 주문 아이템 생성
-            orderItem = createAndSaveOrderItem(orderId, item);
-            
+            // 주문 아이템 생성 (계산된 총 금액 사용)
+            orderItem = OrderItem.builder()
+                    .orderId(orderId)
+                    .productId(item.getProductId().intValue())
+                    .quantity(item.getQuantity().intValue())
+                    .price(itemTotalPrice)  // 계산된 총 금액 저장
+                    .build();
+            orderItemRepository.save(orderItem);
+
             // 결제 완료 상태로 변경
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
             order.setPaymentStatus(PaymentStatus.PAYMENT_COMPLETED);
             order.setPaymentCompletedDate(new Date());
+            order.setTotalPrice(itemTotalPrice); // 주문 총액 설정
             orderRepository.save(order);
-            
+
             // 결제 완료 이벤트 발행
             orderEventService.publishPaymentCompletedEvent(order, List.of(orderItem));
-            
-            return calculateItemPrice(item.getProductId(), item.getQuantity());
+
+            return itemTotalPrice;
         } catch (Exception e) {
             // 실패시 Redis 재고 복구 및 결제 실패 상태로 변경
             stockService.restoreStock(item.getProductId(), item.getQuantity());
@@ -261,7 +270,7 @@ public class OrderService {
             order.setPaymentStatus(PaymentStatus.PAYMENT_FAILED);
             orderRepository.save(order);
             
-            // 결제 실패 이벤트 발행 (orderItem이 null이 아닌 경우에만)
+            // 결제 실패 이벤트 발행
             if (orderItem != null) {
                 orderEventService.publishPaymentFailedEvent(order, List.of(orderItem));
             }
