@@ -1,188 +1,111 @@
 package com.doosan.orderservice.controller;
 
 import com.doosan.common.dto.ResponseDto;
-import com.doosan.common.dto.ResponseMessage;
-import com.doosan.common.dto.order.CreateOrderReqDto;
 import com.doosan.common.exception.BusinessRuntimeException;
 import com.doosan.common.utils.JwtUtil;
 import com.doosan.common.utils.ParseRequestUtil;
-import com.doosan.orderservice.dto.CreateOrderResDto;
 import com.doosan.orderservice.dto.OrderStatusUpdateRequest;
 import com.doosan.orderservice.dto.WishListDto;
 import com.doosan.orderservice.dto.WishListOrderResponseDto;
 import com.doosan.orderservice.service.OrderService;
 import com.doosan.orderservice.service.WishListService;
-import com.doosan.productservice.dto.ProductResponse;
-import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/orders")
+@RequiredArgsConstructor
+@Log4j2
 public class OrderController {
 
     private final OrderService orderService;
-    private final ParseRequestUtil parseRequestUtil;
     private final WishListService wishListService;
+    private final ParseRequestUtil parseRequestUtil;
+    private final JwtUtil jwtUtil;
 
-    @Autowired
-    public OrderController(OrderService orderService, WishListService wishListService, JwtUtil jwtUtil) {
-        this.orderService = orderService;
-        this.wishListService = wishListService;
-        this.parseRequestUtil = new ParseRequestUtil(jwtUtil);
+    // 토큰에서 id 추출
+    private int extractUserId(String token) {
+        if (token != null && token.startsWith(JwtUtil.BEARER_PREFIX)) {
+            String actualToken = token.substring(7);
+            if (jwtUtil.validateToken(actualToken)) {
+                return jwtUtil.getUserIdFromToken(actualToken);
+            }
+            throw new BusinessRuntimeException("유효하지 않은 토큰입니다.");
+        }
+        throw new BusinessRuntimeException("토큰 형식이 올바르지 않습니다.");
     }
 
     // 주문 취소
     @PostMapping("/{orderId}/cancel")
-    public ResponseEntity<ResponseDto<Void>> cancelOrder(
-            HttpServletRequest request,
-            @PathVariable int orderId) {
-        int userId = parseRequestUtil.extractUserIdFromRequest(request);
-        return orderService.cancelOrder(userId, orderId);
+    public Mono<ResponseEntity<ResponseDto<Void>>> cancelOrder(
+            @PathVariable int orderId,
+            @RequestHeader("Authorization") String token) {
+        return orderService.cancelOrder(extractUserId(token), orderId);
     }
 
     // 주문 반품
     @PostMapping("/{orderId}/return")
-    public ResponseEntity<ResponseDto<Void>> requestReturn(
-            HttpServletRequest request,
-            @PathVariable int orderId) {
-        int userId = parseRequestUtil.extractUserIdFromRequest(request);
-        return orderService.requestReturn(userId, orderId);
+    public Mono<ResponseEntity<ResponseDto<Void>>> requestReturn(
+            @PathVariable int orderId,
+            @RequestHeader("Authorization") String token) {
+        return orderService.requestReturn(extractUserId(token), orderId);
     }
 
-    // 주문 생성
-    @PostMapping("create-order")
-    public ResponseEntity<ResponseMessage> createOrder(HttpServletRequest request, @RequestBody List<CreateOrderReqDto> orderItems) {
-        int userId = parseRequestUtil.extractUserIdFromRequest(request);
-
-        CreateOrderResDto orderResponse = orderService.createOrder(userId, orderItems);
-
-        ResponseMessage response = ResponseMessage.builder()
-                .data(orderResponse)
-                .statusCode(200)
-                .resultMessage("Success")
-                .build();
-
-        return ResponseEntity.ok(response);
-    }
-
-    // 주문상태 수동 변경 로직
+    // 주문 상태 업데이트
     @PutMapping("/status")
     public ResponseEntity<?> updateOrderStatus(@RequestBody OrderStatusUpdateRequest request) {
         return orderService.updateOrderStatus(request);
     }
 
-    // WishList 조회
+    // 위시리스트 조회
     @GetMapping("/wishlist")
-    public ResponseEntity<ResponseDto<List<WishListDto>>> getWishList(HttpServletRequest request) {
-        int userId = parseRequestUtil.extractUserIdFromRequest(request);
-        return wishListService.getWishList(userId);
+    public Mono<ResponseEntity<ResponseDto<List<WishListDto>>>> getWishList(ServerHttpRequest request) {
+        return parseRequestUtil.extractUserIdFromRequest(request)
+                .flatMap(userId -> wishListService.getWishList(userId));
     }
 
-    // WishList에 상품 추가
+    // 위시리스트에 상품 담기
     @PostMapping("/wishlist/{productId}")
-    public ResponseEntity<ResponseDto<Void>> addToWishList(
-            HttpServletRequest request,
+    public Mono<ResponseEntity<ResponseDto<Void>>> addToWishList(
+            ServerHttpRequest request,
             @PathVariable Long productId,
             @RequestParam(defaultValue = "1") int quantity) {
-        int userId = parseRequestUtil.extractUserIdFromRequest(request);
-        return wishListService.addToWishList(userId, productId, quantity);
+        return parseRequestUtil.extractUserIdFromRequest(request)
+                .flatMap(userId -> wishListService.addToWishList(userId, productId, quantity));
     }
 
-    // WishList 상품 수량 수정
+    // 위시리스트에 담긴 상품 수량 변경
     @PutMapping("/wishlist/{productId}")
-    public ResponseEntity<ResponseDto<Void>> updateWishListItem(
-            HttpServletRequest request,
+    public Mono<ResponseEntity<ResponseDto<Void>>> updateWishListItem(
+            ServerHttpRequest request,
             @PathVariable Long productId,
-            @RequestParam int quantity) {
-        int userId = parseRequestUtil.extractUserIdFromRequest(request);
-        return wishListService.updateWishListItem(userId, productId, quantity);
+            @RequestParam(defaultValue = "1") int quantity) {
+        return parseRequestUtil.extractUserIdFromRequest(request)
+                .flatMap(userId -> wishListService.updateWishListItem(userId, productId, quantity));
     }
 
-    // WishList에서 상품 제거
+    // 위시리스트에서 상품 제거
     @DeleteMapping("/wishlist/{productId}")
-    public ResponseEntity<ResponseDto<Void>> removeFromWishList(
-            HttpServletRequest request,
+    public Mono<ResponseEntity<ResponseDto<Void>>> removeFromWishList(
+            ServerHttpRequest request,
             @PathVariable Long productId) {
-        int userId = parseRequestUtil.extractUserIdFromRequest(request);
-        return wishListService.removeFromWishList(userId, productId);
+        return parseRequestUtil.extractUserIdFromRequest(request)
+                .flatMap(userId -> wishListService.removeFromWishList(userId, productId));
     }
 
-    // WishList 상품들 주문
+    // 위시리스트에서 상품 주문
     @PostMapping("/wishlist/order")
     public ResponseEntity<ResponseDto<WishListOrderResponseDto>> orderFromWishList(
-            HttpServletRequest request,
+            @RequestHeader("Authorization") String token,
             @RequestBody List<Long> productIds) {
-        int userId = parseRequestUtil.extractUserIdFromRequest(request);
+        int userId = extractUserId(token);
         return wishListService.orderFromWishList(userId, productIds);
-    }
-
-    // Circuit Breaker 테스트용 API
-    @GetMapping("/test/circuit-breaker/{productId}")
-    public ResponseEntity<ResponseDto<ProductResponse>> testCircuitBreaker(@PathVariable Long productId) {
-        try {
-            ProductResponse response = orderService.getProductWithCircuitBreaker(productId);
-            return ResponseEntity.ok(
-                ResponseDto.<ProductResponse>builder()
-                    .statusCode(HttpStatus.OK.value())
-                    .resultMessage("성공")
-                    .data(response)
-                    .build()
-            );
-        } catch (BusinessRuntimeException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ResponseDto.<ProductResponse>builder()
-                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                    .resultMessage(e.getMessage())
-                    .build()
-                );
-        }
-    }
-
-    @GetMapping("/test/random-error")
-    public ResponseEntity<ResponseDto<ProductResponse>> testRandomError() {
-        try {
-            ProductResponse response = orderService.testRandomError();
-            return ResponseEntity.ok(
-                ResponseDto.<ProductResponse>builder()
-                    .statusCode(HttpStatus.OK.value())
-                    .resultMessage("성공")
-                    .data(response)
-                    .build()
-            );
-        } catch (BusinessRuntimeException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ResponseDto.<ProductResponse>builder()
-                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                    .resultMessage(e.getMessage())
-                    .build()
-                );
-        }
-    }
-
-    @GetMapping("/test/timeout")
-    public ResponseEntity<ResponseDto<ProductResponse>> testTimeout() {
-        try {
-            ProductResponse response = orderService.testTimeout();
-            return ResponseEntity.ok(
-                ResponseDto.<ProductResponse>builder()
-                    .statusCode(HttpStatus.OK.value())
-                    .resultMessage("성공")
-                    .data(response)
-                    .build()
-            );
-        } catch (BusinessRuntimeException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ResponseDto.<ProductResponse>builder()
-                    .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                    .resultMessage(e.getMessage())
-                    .build()
-                );
-        }
     }
 
 }
