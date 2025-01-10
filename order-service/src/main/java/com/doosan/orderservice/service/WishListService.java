@@ -16,8 +16,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -27,8 +30,8 @@ public class WishListService {
     private final OrderService orderService;
     private final ProductService productService;
 
-    public ResponseEntity<ResponseDto<List<WishListDto>>> getWishList(int userId) {
-        try {
+    public Mono<ResponseEntity<ResponseDto<List<WishListDto>>>> getWishList(int userId) {
+        return Mono.fromCallable(() -> {
             List<WishList> wishListItems = wishListRepository.findByUserIdAndIsDeletedFalse(userId);
             List<WishListDto> wishListDtos = wishListItems.stream()
                     .map(this::convertToDto)
@@ -41,14 +44,14 @@ public class WishListService {
                             .data(wishListDtos)
                             .build()
             );
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ResponseDto.<List<WishListDto>>builder()
-                            .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                            .resultMessage("위시리스트 조회 실패")
-                            .build()
-                    );
-        }
+        })
+        .onErrorResume(e -> Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ResponseDto.<List<WishListDto>>builder()
+                        .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
+                        .resultMessage("위시리스트 조회 실패")
+                        .build()
+                )))
+        .subscribeOn(Schedulers.boundedElastic());
     }
 
     private WishListDto convertToDto(WishList item) {
@@ -66,17 +69,18 @@ public class WishListService {
         return dto;
     }
 
-    public ResponseEntity<ResponseDto<Void>> addToWishList(int userId, Long productId, int quantity) {
-        try {
-            if (wishListRepository.existsByUserIdAndProductIdAndIsDeletedFalse(userId, productId)) {
+    public Mono<ResponseEntity<ResponseDto<Void>>> addToWishList(int userId, Long productId, int quantity) {
+        return Mono.fromCallable(() -> {
+            Optional<WishList> existingWishList = wishListRepository.findByUserIdAndProductIdAndIsDeletedFalse(userId, productId);
+            if (existingWishList.isPresent()) {
                 throw new BusinessRuntimeException("이미 위시리스트에 존재하는 상품입니다.");
             }
 
-            WishList wishList = new WishList();
-            wishList.setUserId(userId);
-            wishList.setProductId(productId);
-            wishList.setQuantity(quantity);
-            wishList.setDeleted(false);
+            WishList wishList = WishList.builder()
+                    .userId(userId)
+                    .productId(productId)
+                    .quantity(quantity)
+                    .build();
 
             wishListRepository.save(wishList);
 
@@ -86,25 +90,28 @@ public class WishListService {
                             .resultMessage("위시리스트에 상품이 추가되었습니다.")
                             .build()
             );
-        } catch (BusinessRuntimeException e) {
-            return ResponseEntity.badRequest()
+        })
+        .onErrorResume(BusinessRuntimeException.class, e ->
+            Mono.just(ResponseEntity.badRequest()
                     .body(ResponseDto.<Void>builder()
                             .statusCode(HttpStatus.BAD_REQUEST.value())
                             .resultMessage(e.getMessage())
                             .build()
-                    );
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    ))
+        )
+        .onErrorResume(Exception.class, e ->
+            Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseDto.<Void>builder()
                             .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
                             .resultMessage("위시리스트 추가 실패")
                             .build()
-                    );
-        }
+                    ))
+        )
+        .subscribeOn(Schedulers.boundedElastic());
     }
 
-    public ResponseEntity<ResponseDto<Void>> updateWishListItem(int userId, Long productId, int quantity) {
-        try {
+    public Mono<ResponseEntity<ResponseDto<Void>>> updateWishListItem(int userId, Long productId, int quantity) {
+        return Mono.fromCallable(() -> {
             WishList wishList = wishListRepository.findByUserIdAndProductIdAndIsDeletedFalse(userId, productId)
                     .orElseThrow(() -> new BusinessRuntimeException("위시리스트에 존재하지 않는 상품입니다."));
 
@@ -117,25 +124,20 @@ public class WishListService {
                             .resultMessage("위시리스트 상품 수량이 수정되었습니다.")
                             .build()
             );
-        } catch (BusinessRuntimeException e) {
-            return ResponseEntity.badRequest()
+        })
+        .onErrorResume(BusinessRuntimeException.class, e ->
+            Mono.just(ResponseEntity.badRequest()
                     .body(ResponseDto.<Void>builder()
                             .statusCode(HttpStatus.BAD_REQUEST.value())
                             .resultMessage(e.getMessage())
                             .build()
-                    );
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ResponseDto.<Void>builder()
-                            .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
-                            .resultMessage("위시리스트 수정 실패")
-                            .build()
-                    );
-        }
+                    ))
+        )
+        .subscribeOn(Schedulers.boundedElastic());
     }
 
-    public ResponseEntity<ResponseDto<Void>> removeFromWishList(int userId, Long productId) {
-        try {
+    public Mono<ResponseEntity<ResponseDto<Void>>> removeFromWishList(int userId, Long productId) {
+        return Mono.fromCallable(() -> {
             WishList wishList = wishListRepository.findByUserIdAndProductIdAndIsDeletedFalse(userId, productId)
                     .orElseThrow(() -> new BusinessRuntimeException("위시리스트에 존재하지 않는 상품입니다."));
 
@@ -148,21 +150,24 @@ public class WishListService {
                             .resultMessage("위시리스트에서 상품이 제거되었습니다.")
                             .build()
             );
-        } catch (BusinessRuntimeException e) {
-            return ResponseEntity.badRequest()
+        })
+        .onErrorResume(BusinessRuntimeException.class, e ->
+            Mono.just(ResponseEntity.badRequest()
                     .body(ResponseDto.<Void>builder()
                             .statusCode(HttpStatus.BAD_REQUEST.value())
                             .resultMessage(e.getMessage())
                             .build()
-                    );
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    ))
+        )
+        .onErrorResume(Exception.class, e ->
+            Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(ResponseDto.<Void>builder()
                             .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value())
                             .resultMessage("위시리스트 제거 실패")
                             .build()
-                    );
-        }
+                    ))
+        )
+        .subscribeOn(Schedulers.boundedElastic());
     }
 
     @Transactional

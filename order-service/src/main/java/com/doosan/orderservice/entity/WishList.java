@@ -1,20 +1,26 @@
 package com.doosan.orderservice.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Entity
-@Getter
-@Setter
 @Table(name = "wish_list")
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class WishList {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer id; // 위시리스트 아이디
+    private Long id;
     
-    private Integer userId; // 유저 아이디
-    private Long productId; // 상품 아이디
-    private Integer quantity; // 수량
-    private boolean isDeleted; // 삭제여부
+    private int userId; // 사용자 id
+    private Long productId; // 상품 id
+    private int quantity; // 수량
+    
+    @Builder.Default
+    private boolean isDeleted = false; // 삭제여부
 } 
