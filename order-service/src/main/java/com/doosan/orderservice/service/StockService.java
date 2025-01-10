@@ -102,7 +102,7 @@ public class StockService {
     }
 
     // 재고 모니터링 정보 업데이트
-    private void updateStockMonitoring(Long productId, Long currentStock, String operation) {
+    public void updateStockMonitoring(Long productId, Long currentStock, String operation) {
         String monitorKey = STOCK_MONITOR_KEY_PREFIX + productId;
         String monitorInfo = String.format(
             "{\"timestamp\":\"%s\",\"stock\":%d,\"operation\":\"%s\"}", 
