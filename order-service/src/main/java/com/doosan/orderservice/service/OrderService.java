@@ -9,6 +9,8 @@ import com.doosan.orderservice.entity.Order;
 import com.doosan.orderservice.entity.OrderItem;
 import com.doosan.orderservice.entity.OrderStatus;
 import com.doosan.orderservice.entity.PaymentStatus;
+import com.doosan.orderservice.model.StockEvent;
+import com.doosan.orderservice.model.StockEventType;
 import com.doosan.orderservice.repository.OrderItemRepository;
 import com.doosan.orderservice.repository.OrderRepository;
 import com.doosan.orderservice.repository.WishListRepository;
@@ -22,6 +24,9 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.Date;
 import java.util.List;
@@ -38,7 +43,10 @@ public class OrderService {
     private final StockService stockService;
     private final ExecutorService executorService;
     private final OrderEventService orderEventService;
+    private final ReactiveStockService reactiveStockService;
+    private final ReactiveStockEventService reactiveStockEventService;
 
+    // 주문 생성
     @Transactional
     public CreateOrderResDto createOrder(int userId, List<CreateOrderReqDto> orderItems) {
         try {
@@ -58,71 +66,54 @@ public class OrderService {
         }
     }
 
+    // 주문 취소
     @Transactional
-    public ResponseEntity<ResponseDto<Void>> cancelOrder(int userId, int orderId) {
-        try {
+    public Mono<ResponseEntity<ResponseDto<Void>>> cancelOrder(int userId, int orderId) {
+        return Mono.fromCallable(() -> {
             log.info("주문 취소 시작 - userId: {}, orderId: {}", userId, orderId);
             
-            Order order = orderRepository.findById(orderId)
+            return orderRepository.findById(orderId)
+                    .map(order -> {
+                        if (order.getUserId() != userId) {
+                            throw new BusinessRuntimeException("주문 취소 권한이 없습니다.");
+                        }
+                        
+                        if (order.getStatus() == OrderStatus.DELIVERING) {
+                            throw new BusinessRuntimeException("배송중인 주문은 취소할 수 없습니다.");
+                        }
+                        
+                        if (order.getStatus() == OrderStatus.CANCEL_COMPLETE) {
+                            throw new BusinessRuntimeException("이미 취소된 주문입니다.");
+                        }
+                        
+                        order.setStatus(OrderStatus.CANCEL_COMPLETE);
+                        orderRepository.save(order);
+                        
+                        return ResponseEntity.ok(
+                            ResponseDto.<Void>builder()
+                                .statusCode(HttpStatus.OK.value())
+                                .resultMessage("주문 취소가 완료되었습니다.")
+                                .build()
+                        );
+                    })
                     .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
-            log.info("주문 조회 완료 - 현재 상태: {}", order.getStatus());
-
-            if (order.getUserId() != userId) {
-                throw new BusinessRuntimeException("주문 취소 권한이 없습니다.");
-            }
-
-            if (order.getStatus() == OrderStatus.DELIVERING) {
-                throw new BusinessRuntimeException("배송중인 주문은 취소할 수 없습니다.");
-            }
-
-            if (order.getStatus() == OrderStatus.CANCEL_COMPLETE) {
-                throw new BusinessRuntimeException("이미 취소된 주문입니다.");
-            }
-
-            // 주문 상태 변경 및 취소 날짜 설정
-            Date cancelDate = new Date();
-            order.setStatus(OrderStatus.CANCEL_COMPLETE);
-            order.setCancelCompleteDate(cancelDate);
-            orderRepository.save(order);
-            log.info("주문 상태 변경 완료 - 취소 날짜: {}", cancelDate);
-
-            // 재고 복구
-            List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
-            for (OrderItem item : orderItems) {
-                // ProductService 재고 복구
-                productService.updateStock(CreateOrderReqDto.builder()
-                        .productId((long) item.getProductId())
-                        .quantity((long) item.getQuantity())
-                        .build());
-                
-                // Redis 재고 복구
-                stockService.restoreStock((long) item.getProductId(), (long) item.getQuantity());
-            }
-            log.info("재고 복구 완료 (DB 및 Redis)");
-
-            // 주문 취소 이벤트 발행
-            orderEventService.publishOrderCancelledEvent(order, orderItems);
-
-            return ResponseEntity.ok(
-                    ResponseDto.<Void>builder()
-                            .statusCode(HttpStatus.OK.value())
-                            .resultMessage("주문이 성공적으로 취소되었습니다.")
-                            .build()
-            );
-        } catch (BusinessRuntimeException e) {
-            log.error("주문 취소 실패 - BusinessRuntimeException: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                    .body(ResponseDto.<Void>builder()
-                            .statusCode(HttpStatus.BAD_REQUEST.value())
-                            .resultMessage(e.getMessage())
-                            .build()
-                    );
-        }
+        })
+        .subscribeOn(Schedulers.boundedElastic())
+        .onErrorResume(BusinessRuntimeException.class, 
+            e -> Mono.just(ResponseEntity.badRequest()
+                .body(ResponseDto.<Void>builder()
+                    .statusCode(HttpStatus.BAD_REQUEST.value())
+                    .resultMessage(e.getMessage())
+                    .build()
+                )));
     }
 
+    // 주문 반품
     @Transactional
-    public ResponseEntity<ResponseDto<Void>> requestReturn(int userId, int orderId) {
-        try {
+    public Mono<ResponseEntity<ResponseDto<Void>>> requestReturn(int userId, int orderId) {
+        return Mono.fromCallable(() -> {
+            log.info("반품 요청 시작 - userId: {}, orderId: {}", userId, orderId);
+            
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
 
@@ -148,14 +139,15 @@ public class OrderService {
                             .resultMessage("반품 신청이 완료되었습니다.")
                             .build()
             );
-        } catch (BusinessRuntimeException e) {
-            return ResponseEntity.badRequest()
-                    .body(ResponseDto.<Void>builder()
-                            .statusCode(HttpStatus.BAD_REQUEST.value())
-                            .resultMessage(e.getMessage())
-                            .build()
-                    );
-        }
+        })
+        .subscribeOn(Schedulers.boundedElastic())
+        .onErrorResume(BusinessRuntimeException.class, 
+            e -> Mono.just(ResponseEntity.badRequest()
+                .body(ResponseDto.<Void>builder()
+                    .statusCode(HttpStatus.BAD_REQUEST.value())
+                    .resultMessage(e.getMessage())
+                    .build()
+                )));
     }
 
     @Transactional
@@ -335,6 +327,34 @@ public class OrderService {
                 .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
         log.info("주문 결제 상태 조회 - 주문 ID: {}, 결제 상태: {}", orderId, order.getPaymentStatus());
         return order.getPaymentStatus();
+    }
+
+    public Mono<CreateOrderResDto> createReactiveOrder(int userId, List<CreateOrderReqDto> orderRequests) {
+        return Flux.fromIterable(orderRequests)
+            .flatMap(request -> 
+                reactiveStockService.checkAndReduceStock(
+                    request.getProductId(), 
+                    request.getQuantity()
+                )
+                .map(success -> {
+                    if (!success) {
+                        throw new BusinessRuntimeException("재고 부족");
+                    }
+                    return request;
+                })
+            )
+            .collectList()
+            .flatMap(validatedRequests -> 
+                Mono.fromCallable(() -> {
+                    CreateOrderResDto orderResult = createOrder(userId, validatedRequests);
+                    reactiveStockEventService.publishStockEvent(new StockEvent(
+                        StockEventType.STOCK_REDUCED,
+                        Long.valueOf(orderResult.getOrderId()),
+                        Long.valueOf(orderResult.getTotalPrice())
+                    )).subscribe();
+                    return orderResult;
+                })
+            );
     }
 
 }
