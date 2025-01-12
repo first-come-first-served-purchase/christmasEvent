@@ -4,13 +4,13 @@ import com.doosan.common.dto.ResponseDto;
 import com.doosan.common.dto.order.CreateOrderReqDto;
 import com.doosan.common.exception.BusinessRuntimeException;
 import com.doosan.orderservice.dto.CreateOrderResDto;
+import com.doosan.orderservice.dto.OrderInfoResponse;
+import com.doosan.orderservice.dto.OrderItemResponse;
 import com.doosan.orderservice.dto.OrderStatusUpdateRequest;
 import com.doosan.orderservice.entity.Order;
 import com.doosan.orderservice.entity.OrderItem;
 import com.doosan.orderservice.entity.OrderStatus;
 import com.doosan.orderservice.entity.PaymentStatus;
-import com.doosan.orderservice.model.StockEvent;
-import com.doosan.orderservice.model.StockEventType;
 import com.doosan.orderservice.repository.OrderItemRepository;
 import com.doosan.orderservice.repository.OrderRepository;
 import com.doosan.orderservice.repository.WishListRepository;
@@ -21,29 +21,37 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class OrderService {
+    private final ReactiveStockService reactiveStockService;
     private final ProductService productService;
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final WishListRepository wishListRepository;
-    private final StockService stockService;
     private final ExecutorService executorService;
     private final OrderEventService orderEventService;
-    private final ReactiveStockService reactiveStockService;
     private final ReactiveStockEventService reactiveStockEventService;
 
     // 주문 생성
@@ -206,15 +214,18 @@ public class OrderService {
         order.setUserId(userId);
         order.setOrderDate(new Date());
         order.setStatus(OrderStatus.ORDER_COMPLETE);
+        order.setPaymentStatus(PaymentStatus.PAYMENT_COMPLETED);
         return orderRepository.save(order);
     }
 
-    private int calculateTotalPrice(Order order, List<CreateOrderReqDto> orderItems) {
-        int totalPrice = 0;
-        for (CreateOrderReqDto item : orderItems) {
-            totalPrice += processOrderItem(order.getId(), item);
+    private int calculateTotalPrice(Order order, List<CreateOrderReqDto> requests) {
+        if (requests.isEmpty()) {
+            throw new BusinessRuntimeException("주문 항목이 없어 가격을 계산할 수 없습니다.");
         }
-        return totalPrice;
+        
+        return requests.stream()
+            .mapToInt(item -> processOrderItem(order.getId(), item))
+            .sum();
     }
 
     private void updateOrderTotalPrice(Order order, int totalPrice) {
@@ -233,30 +244,30 @@ public class OrderService {
                     .quantity(-item.getQuantity())
                     .build());
 
-            // 주문 아이템 생성 (계산된 총 금액 사용)
+            // 주문 아이템 생성
             orderItem = OrderItem.builder()
                     .orderId(orderId)
                     .productId(item.getProductId().intValue())
                     .quantity(item.getQuantity().intValue())
-                    .price(itemTotalPrice)  // 계산된 총 금액 저장
+                    .price(itemTotalPrice)
                     .build();
             orderItemRepository.save(orderItem);
 
-            // 결제 완료 상태로 변경
+            // 주문 상태 업데이트
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
             order.setPaymentStatus(PaymentStatus.PAYMENT_COMPLETED);
             order.setPaymentCompletedDate(new Date());
-            order.setTotalPrice(itemTotalPrice); // 주문 총액 설정
+
+            order.setTotalPrice(order.getTotalPrice() + itemTotalPrice);
             orderRepository.save(order);
 
-            // 결제 완료 이벤트 발행
             orderEventService.publishPaymentCompletedEvent(order, List.of(orderItem));
 
             return itemTotalPrice;
         } catch (Exception e) {
             // 실패시 Redis 재고 복구 및 결제 실패 상태로 변경
-            stockService.restoreStock(item.getProductId(), item.getQuantity());
+            reactiveStockService.restoreStock(item.getProductId(), item.getQuantity());
             Order order = orderRepository.findById(orderId)
                     .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
             order.setPaymentStatus(PaymentStatus.PAYMENT_FAILED);
@@ -325,36 +336,177 @@ public class OrderService {
     public PaymentStatus getOrderPaymentStatus(int orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
-        log.info("주문 결제 상태 조회 - 주문 ID: {}, 결제 상태: {}", orderId, order.getPaymentStatus());
+        log.info("#####주문 결제 상태 조회 - 주문 ID: {}, 결제 상태: {}", orderId, order.getPaymentStatus());
         return order.getPaymentStatus();
     }
-
     public Mono<CreateOrderResDto> createReactiveOrder(int userId, List<CreateOrderReqDto> orderRequests) {
         return Flux.fromIterable(orderRequests)
-            .flatMap(request -> 
-                reactiveStockService.checkAndReduceStock(
-                    request.getProductId(), 
-                    request.getQuantity()
+                .doOnNext(request ->
+                        log.info("##### 주문 요청 처리 시작 - 상품 ID: {}, 수량: {}",
+                                request.getProductId(), request.getQuantity())
                 )
-                .map(success -> {
-                    if (!success) {
-                        throw new BusinessRuntimeException("재고 부족");
+                .flatMap(request ->
+                        reactiveStockService.checkAndReduceStock(
+                                        request.getProductId(),
+                                        Long.valueOf(request.getQuantity())
+                                )
+                                .doOnNext(success -> {
+                                    if (!success) {
+                                        log.error("##### 재고 확인 실패 - 상품 ID: {}, 수량: {}",
+                                                request.getProductId(), request.getQuantity());
+                                        throw new BusinessRuntimeException(
+                                                String.format("상품 ID %d의 재고가 부족합니다.", request.getProductId()));
+                                    }
+                                })
+                                .thenReturn(request)
+                )
+                .collectList()
+                .doOnNext(validatedRequests -> {
+                    if (validatedRequests.isEmpty()) {
+                        throw new BusinessRuntimeException("유효한 주문 요청이 없습니다.");
                     }
-                    return request;
+                    log.info("##### 유효성 검사가 완료된 주문 요청: {}", validatedRequests);
                 })
-            )
-            .collectList()
-            .flatMap(validatedRequests -> 
-                Mono.fromCallable(() -> {
-                    CreateOrderResDto orderResult = createOrder(userId, validatedRequests);
-                    reactiveStockEventService.publishStockEvent(new StockEvent(
-                        StockEventType.STOCK_REDUCED,
-                        Long.valueOf(orderResult.getOrderId()),
-                        Long.valueOf(orderResult.getTotalPrice())
-                    )).subscribe();
-                    return orderResult;
+                .flatMap(validatedRequests ->
+                        Mono.fromCallable(() -> {
+                            log.info("##### 주문 생성 시작 - 사용자 ID: {}", userId);
+
+                            // 주문 생성 및 저장
+                            Order order = createAndSaveOrder(userId);
+                            log.info("##### 주문 생성 완료 - 주문 ID: {}, 사용자 ID: {}, 주문일: {}",
+                                    order.getId(), userId, order.getOrderDate());
+
+                            // 총 가격 계산
+                            log.info("##### 총 가격 계산 시작 - 주문 ID: {}", order.getId());
+                            int totalPrice = calculateTotalPrice(order, validatedRequests);
+                            log.info("##### 총 가격 계산 완료 - 주문 ID: {}, 총 가격: {}",
+                                    order.getId(), totalPrice);
+
+                            // 주문 총 가격 업데이트
+                            log.info("##### 주문 총 가격 업데이트 시작 - 주문 ID: {}", order.getId());
+                            updateOrderTotalPrice(order, totalPrice);
+                            log.info("##### 주문 총 가격 업데이트 완료 - 주문 ID: {}, 총 가격: {}",
+                                    order.getId(), totalPrice);
+
+                            // 결과 DTO 생성
+                            CreateOrderResDto response = new CreateOrderResDto(
+                                    order.getId(),
+                                    userId,
+                                    order.getOrderDate(),
+                                    totalPrice
+                            );
+                            log.info("##### 주문 처리 완료 - 주문 응답: {}", response);
+
+                            return response;
+                        })
+                );
+    }
+
+
+    public OrderInfoResponse getOrderInfo(Long orderId) {
+        Order order = orderRepository.findById(Math.toIntExact(orderId))
+                .orElseThrow(() -> new BusinessRuntimeException("주문을 찾을 수 없습니다."));
+
+        // PaymentStatus가 null인 경우 처리
+        if (order.getPaymentStatus() == null) {
+            order.setPaymentStatus(order.getTotalPrice() > 0 ?
+                    PaymentStatus.PAYMENT_COMPLETED : PaymentStatus.PAYMENT_FAILED);
+            orderRepository.save(order);
+        }
+
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(Math.toIntExact(orderId));
+        List<OrderItemResponse> orderItemResponses = orderItems.stream()
+                .map(item -> {
+                    ResponseDto<ProductResponse> productResponse = productService.getProduct((long) item.getProductId()).getBody();
+                    String productName = "";
+                    if (productResponse != null && productResponse.getData() != null) {
+                        productName = productResponse.getData().getName();
+                    }
+
+                    return OrderItemResponse.builder()
+                            .productId((long) item.getProductId())
+                            .productName(productName)
+                            .quantity((long) item.getQuantity())
+                            .price((long) item.getPrice())
+                            .build();
                 })
-            );
+                .collect(Collectors.toList());
+
+        return OrderInfoResponse.builder()
+                .orderId((long) order.getId())
+                .userId((long) order.getUserId())
+                .orderDate(order.getOrderDate())
+                .totalPrice((long) order.getTotalPrice())
+                .status(order.getStatus())
+                .paymentStatus(order.getPaymentStatus())
+                .orderItems(orderItemResponses)
+                .build();
+    }
+
+    public Page<OrderInfoResponse> getUserOrders(Long userId, Long page, Long size,
+                                                 String sort, String direction, String status, Date startDate, Date endDate) {
+
+        // 정렬 조건 설정
+        Sort sortObj = Sort.by(Sort.Direction.fromString(direction),
+                StringUtils.hasText(sort) ? sort : "orderDate");
+
+        Pageable pageable = PageRequest.of(page.intValue(), size.intValue(), sortObj);
+
+        // 동적 쿼리 조건 생성
+        Specification<Order> spec = (root, query, cb) -> {
+            List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+
+            // 사용자 ID 조건
+            predicates.add(cb.equal(root.get("userId"), Math.toIntExact(userId)));
+
+            // 주문 상태 필터
+            if (StringUtils.hasText(status)) {
+                predicates.add(cb.equal(root.get("status"), OrderStatus.valueOf(status)));
+            }
+
+            // 날짜 범위 필터
+            if (startDate != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("orderDate"), startDate));
+            }
+            if (endDate != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("orderDate"), endDate));
+            }
+
+            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+
+        Page<Order> orders = orderRepository.findAll(spec, pageable);
+
+        return orders.map(order -> {
+            List<OrderItem> orderItems = orderItemRepository.findByOrderId(order.getId());
+            List<OrderItemResponse> orderItemResponses = orderItems.stream()
+                    .map(item -> {
+                        ResponseDto<ProductResponse> productResponse =
+                                productService.getProduct((long) item.getProductId()).getBody();
+                        String productName = "";
+                        if (productResponse != null && productResponse.getData() != null) {
+                            productName = productResponse.getData().getName();
+                        }
+
+                        return OrderItemResponse.builder()
+                                .productId((long) item.getProductId())
+                                .productName(productName)
+                                .quantity((long) item.getQuantity())
+                                .price((long) item.getPrice())
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+
+            return OrderInfoResponse.builder()
+                    .orderId((long) order.getId())
+                    .userId((long) order.getUserId())
+                    .orderDate(order.getOrderDate())
+                    .totalPrice((long) order.getTotalPrice())
+                    .status(order.getStatus())
+                    .paymentStatus(order.getPaymentStatus())
+                    .orderItems(orderItemResponses)
+                    .build();
+        });
     }
 
 }
