@@ -4,6 +4,7 @@ import com.doosan.common.dto.ResponseDto;
 import com.doosan.common.exception.BusinessRuntimeException;
 import com.doosan.common.utils.JwtUtil;
 import com.doosan.common.utils.ParseRequestUtil;
+import com.doosan.orderservice.dto.OrderInfoResponse;
 import com.doosan.orderservice.dto.OrderStatusUpdateRequest;
 import com.doosan.orderservice.dto.WishListDto;
 import com.doosan.orderservice.dto.WishListOrderResponseDto;
@@ -11,11 +12,15 @@ import com.doosan.orderservice.service.OrderService;
 import com.doosan.orderservice.service.WishListService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.data.domain.Page;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.util.Date;
 import java.util.List;
 
 @RestController
@@ -107,5 +112,58 @@ public class OrderController {
         int userId = extractUserId(token);
         return wishListService.orderFromWishList(userId, productIds);
     }
+
+
+    @GetMapping("/{orderId}")
+    public Mono<ResponseEntity<ResponseDto<OrderInfoResponse>>> getOrderInfo(@PathVariable Long orderId) {
+        return Mono.fromCallable(() -> orderService.getOrderInfo(orderId))
+                .map(orderInfo -> ResponseEntity.ok(
+                        ResponseDto.<OrderInfoResponse>builder()
+                                .statusCode(HttpStatus.OK.value())
+                                .resultMessage("주문 조회 성공")
+                                .data(orderInfo)
+                                .build()
+                ))
+                .onErrorResume(e -> Mono.just(
+                        ResponseEntity.badRequest()
+                                .body(ResponseDto.<OrderInfoResponse>builder()
+                                        .statusCode(HttpStatus.BAD_REQUEST.value())
+                                        .resultMessage(e.getMessage())
+                                        .build())
+                ));
+    }
+
+    @GetMapping("/user")
+    public Mono<ResponseEntity<ResponseDto<Page<OrderInfoResponse>>>> getUserOrders(
+            ServerHttpRequest request,
+            @RequestParam(defaultValue = "0") Long page,
+            @RequestParam(defaultValue = "10") Long size,
+            @RequestParam(required = false) String sort,
+            @RequestParam(defaultValue = "desc") String direction,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Date startDate,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") Date endDate) {
+
+        return parseRequestUtil.extractUserIdFromRequest(request)
+                .flatMap(userId ->
+                        Mono.fromCallable(() -> orderService.getUserOrders(
+                                Long.valueOf(userId),
+                                page,
+                                size,
+                                sort,
+                                direction,
+                                status,
+                                startDate,
+                                endDate))
+                )
+                .map(orders -> ResponseEntity.ok(
+                        ResponseDto.<Page<OrderInfoResponse>>builder()
+                                .statusCode(HttpStatus.OK.value())
+                                .resultMessage("주문 목록 조회 성공")
+                                .data(orders)
+                                .build()
+                ));
+    }
+
 
 }
